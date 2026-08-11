@@ -1,7 +1,7 @@
 - name: harbor
   # agent:
   #   name: terminus-2
-  sandbox: modal
+  harbor_env: modal
   run_oracle_solution: true
   timeout_multiplier: 1.0
   trials_dir: /tmp/uni_agent_harbor_trials

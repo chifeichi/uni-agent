@@ -33,7 +33,8 @@ class HarborTaskConfig(TaskConfig):
     """Configuration for one evaluation-only Harbor CLI trial."""
 
     name: str = "harbor"
-    sandbox: str = Field(default="docker", description="Harbor environment backend.")
+    sandbox: None = Field(default=None, exclude=True)
+    harbor_env: str = Field(default="docker", description="Harbor environment backend.")
     agent: HarborAgentConfig = Field(default_factory=HarborAgentConfig)
     timeout_multiplier: float = Field(default=1.0, gt=0)
     trials_dir: Path = Field(default=Path("/tmp/uni_agent_harbor_trials"))
@@ -46,6 +47,13 @@ class HarborTaskConfig(TaskConfig):
     @classmethod
     def _resolve_agent(cls, value: Any) -> Any:
         return value
+
+    @field_validator("sandbox", mode="before")
+    @classmethod
+    def _reject_sandbox(cls, value: Any) -> None:
+        if value is not None:
+            raise ValueError("HarborTask does not use a Uni-Agent sandbox; configure harbor_env instead")
+        return None
 
     @model_validator(mode="after")
     def _validate_local_trial(self) -> HarborTaskConfig:
@@ -65,8 +73,8 @@ class HarborTaskConfig(TaskConfig):
         self.trials_dir = self.trials_dir.expanduser()
         if not self.trials_dir.is_absolute():
             raise ValueError(f"Harbor trials_dir must be absolute, got {self.trials_dir}")
-        if not self.sandbox.strip():
-            raise ValueError("Harbor sandbox must be non-empty")
+        if not self.harbor_env.strip():
+            raise ValueError("HarborTask harbor_env must be non-empty")
         if not self.run_oracle_solution and not self.agent.name.strip():
             raise ValueError("Harbor agent.name must be non-empty unless run_oracle_solution is enabled")
         return self
@@ -89,7 +97,7 @@ def build_harbor_trial_command(config: HarborTaskConfig, *, trial_name: str) -> 
         "--agent",
         agent_name,
         "--env",
-        config.sandbox,
+        config.harbor_env,
         "--timeout-multiplier",
         f"{config.timeout_multiplier:g}",
     ]
@@ -164,7 +172,7 @@ class HarborTask(Task):
             instance_id,
             "oracle" if config.run_oracle_solution else config.agent.name,
             None if config.run_oracle_solution else config.agent.model.model_name,
-            config.sandbox,
+            config.harbor_env,
             trial_name,
         )
         started = time.perf_counter()
