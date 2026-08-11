@@ -38,10 +38,6 @@ class HarborTaskConfig(TaskConfig):
     agent: HarborAgentConfig = Field(default_factory=HarborAgentConfig)
     timeout_multiplier: float = Field(default=1.0, gt=0)
     trials_dir: Path = Field(default=Path("/tmp/uni_agent_harbor_trials"))
-    run_oracle_solution: bool = Field(
-        default=False,
-        description="Run Harbor's oracle agent instead of the configured agent.",
-    )
 
     @field_validator("agent", mode="before")
     @classmethod
@@ -75,15 +71,14 @@ class HarborTaskConfig(TaskConfig):
             raise ValueError(f"Harbor trials_dir must be absolute, got {self.trials_dir}")
         if not self.harbor_env.strip():
             raise ValueError("HarborTask harbor_env must be non-empty")
-        if not self.run_oracle_solution and not self.agent.name.strip():
-            raise ValueError("Harbor agent.name must be non-empty unless run_oracle_solution is enabled")
+        if not self.agent.name.strip():
+            raise ValueError("Harbor agent.name must be non-empty")
         return self
 
 
 def build_harbor_trial_command(config: HarborTaskConfig, *, trial_name: str) -> list[str]:
     """Build the argv for one collision-safe Harbor trial."""
     task_path = str(config.metadata["task_path"])
-    agent_name = "oracle" if config.run_oracle_solution else config.agent.name
     command = [
         "harbor",
         "trial",
@@ -95,21 +90,21 @@ def build_harbor_trial_command(config: HarborTaskConfig, *, trial_name: str) -> 
         "--trials-dir",
         str(config.trials_dir),
         "--agent",
-        agent_name,
+        config.agent.name,
         "--env",
         config.harbor_env,
         "--timeout-multiplier",
         f"{config.timeout_multiplier:g}",
     ]
 
-    if not config.run_oracle_solution and config.agent.model.model_name:
+    if config.agent.name != "oracle" and config.agent.model.model_name:
         command.extend(["--model", config.agent.model.model_name])
     return command
 
 
 def build_harbor_process_env(config: HarborTaskConfig) -> dict[str, str] | None:
     """Map the runtime model endpoint into Harbor's host process environment."""
-    if config.run_oracle_solution:
+    if config.agent.name == "oracle":
         return None
 
     process_env: dict[str, str] = {}
@@ -170,8 +165,8 @@ class HarborTask(Task):
         logger.info(
             "starting Harbor trial (instance_id=%s, agent=%s, model=%s, environment=%s, trial=%s)",
             instance_id,
-            "oracle" if config.run_oracle_solution else config.agent.name,
-            None if config.run_oracle_solution else config.agent.model.model_name,
+            config.agent.name,
+            None if config.agent.name == "oracle" else config.agent.model.model_name,
             config.harbor_env,
             trial_name,
         )
