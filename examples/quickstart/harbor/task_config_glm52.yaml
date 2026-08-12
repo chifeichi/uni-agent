@@ -6,7 +6,6 @@
       parser_name: json
       temperature: 1.0
       reasoning_effort: max
-      interleaved_thinking: true
       max_turns: 500
       suppress_max_turns_warning: true
       model_info:
@@ -15,10 +14,6 @@
       llm_call_kwargs:
         top_p: 1.0
         max_tokens: 49152
-        extra_body:
-          thinking:
-            type: enabled
-            clear_thinking: false
   harbor_env: modal
   timeout_multiplier: 1.0
   override_cpus: 4

@@ -52,6 +52,7 @@ nav:
       - Installation: quickstart/installation.md
       - Launch a Sandbox: quickstart/launch-sandbox.md
       - Run Agent Inference: quickstart/agent-inference.md
+      - Harbor Integration: quickstart/harbor-evaluation.md
       - Run Agent RL Training: quickstart/rl-training.md
       - Run Training on NPU: quickstart/npu-training.md
   - Concepts:
@@ -92,7 +93,7 @@ extra_javascript:
   - assets/js/runllm-widget.js
 
 extra_css:
-  - assets/stylesheets/extra.css?v=24
+  - assets/stylesheets/extra.css?v=31
 
 extra:
   social:
