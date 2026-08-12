@@ -208,7 +208,7 @@ class HarborTask(Task):
             response = await run_harbor_cli(command, env=process_env)
         except FileNotFoundError as exc:
             raise RuntimeError(
-                "Harbor CLI executable was not found; install Harbor 0.20 or later and ensure `harbor` is on PATH"
+                "Harbor CLI executable was not found; install Harbor 0.16.0 or later and ensure `harbor` is on PATH"
             ) from exc
         elapsed = time.perf_counter() - started
 

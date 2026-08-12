@@ -20,7 +20,7 @@ def download_dataset(dataset_ref: str, output_dir: Path | str) -> Path:
     try:
         subprocess.run(command, check=True)
     except FileNotFoundError as exc:
-        raise RuntimeError("Harbor CLI executable was not found; install Harbor 0.20 or later") from exc
+        raise RuntimeError("Harbor CLI executable was not found; install Harbor 0.16.0 or later") from exc
     except subprocess.CalledProcessError as exc:
         raise RuntimeError(f"failed to download Harbor dataset {dataset_ref!r}") from exc
 
