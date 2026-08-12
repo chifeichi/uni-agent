@@ -11,9 +11,6 @@ import logging
 import os
 from dataclasses import dataclass
 
-# Set by ``sample_logging``; read by the dispatch handler and console filter.
-_current_log_id: contextvars.ContextVar[str | None] = contextvars.ContextVar("uni_agent_log_id", default=None)
-
 # Fixed-width logger-name column so the ``|`` separators line up; _AlignedFormatter
 # trims each name to _NAME_WIDTH and fills ``shortname``.
 _NAME_WIDTH = 22
@@ -42,5 +39,17 @@ class LogContext:
     log_path: str | None = None
 
 
+_current_log_context: contextvars.ContextVar[LogContext | None] = contextvars.ContextVar(
+    "uni_agent_log_context",
+    default=None,
+)
+
+
+def get_current_log_context() -> LogContext | None:
+    """Return the logging context bound to the current execution."""
+    return _current_log_context.get()
+
+
 def _resolve_log_id(record: logging.LogRecord) -> str | None:
-    return _current_log_id.get()
+    context = get_current_log_context()
+    return context.log_id if context is not None else None

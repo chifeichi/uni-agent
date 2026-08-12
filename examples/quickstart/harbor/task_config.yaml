@@ -3,4 +3,3 @@
     name: oracle
   harbor_env: modal
   timeout_multiplier: 1.0
-  trials_dir: /tmp/uni_agent_harbor_trials

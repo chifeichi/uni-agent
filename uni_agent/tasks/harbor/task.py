@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,12 +16,14 @@ from uuid import uuid4
 from pydantic import Field, field_validator, model_validator
 
 from uni_agent.agents import AgentConfig
+from uni_agent.logging import get_current_log_context
 
 from ..base import Task, TaskConfig, TaskResult
 from ..registry import register_task
 from .reward import task_result_from_harbor_trial
 
 logger = logging.getLogger(__name__)
+_TEMP_TRIALS_DIR = Path("/tmp/harbor-trials")
 
 
 class HarborAgentConfig(AgentConfig):
@@ -37,7 +40,6 @@ class HarborTaskConfig(TaskConfig):
     harbor_env: str = Field(default="docker", description="Harbor environment backend.")
     agent: HarborAgentConfig = Field(default_factory=HarborAgentConfig)
     timeout_multiplier: float = Field(default=1.0, gt=0)
-    trials_dir: Path = Field(default=Path("/tmp/uni_agent_harbor_trials"))
 
     @field_validator("agent", mode="before")
     @classmethod
@@ -66,9 +68,6 @@ class HarborTaskConfig(TaskConfig):
         if not task_path.is_dir() or not (task_path / "task.toml").is_file():
             raise ValueError(f"Harbor task_path is not a task directory: {task_path}")
 
-        self.trials_dir = self.trials_dir.expanduser()
-        if not self.trials_dir.is_absolute():
-            raise ValueError(f"Harbor trials_dir must be absolute, got {self.trials_dir}")
         if not self.harbor_env.strip():
             raise ValueError("HarborTask harbor_env must be non-empty")
         if not self.agent.name.strip():
@@ -76,7 +75,12 @@ class HarborTaskConfig(TaskConfig):
         return self
 
 
-def build_harbor_trial_command(config: HarborTaskConfig, *, trial_name: str) -> list[str]:
+def build_harbor_trial_command(
+    config: HarborTaskConfig,
+    *,
+    trial_name: str,
+    trials_dir: Path,
+) -> list[str]:
     """Build the argv for one collision-safe Harbor trial."""
     task_path = str(config.metadata["task_path"])
     command = [
@@ -88,7 +92,7 @@ def build_harbor_trial_command(config: HarborTaskConfig, *, trial_name: str) -> 
         "--trial-name",
         trial_name,
         "--trials-dir",
-        str(config.trials_dir),
+        str(trials_dir),
         "--agent",
         config.agent.name,
         "--env",
@@ -151,24 +155,53 @@ class HarborTask(Task):
 
     async def run(self) -> TaskResult:
         config: HarborTaskConfig = self.config  # type: ignore[assignment]
+        log_context = get_current_log_context()
+        output_dir: Path | None = None
+        if log_context is not None and log_context.log_path:
+            rollout_dir = Path(log_context.log_path).expanduser().resolve().parent
+            output_dir = rollout_dir / "harbor"
+            await asyncio.to_thread(rollout_dir.mkdir, parents=True, exist_ok=True)
+            if output_dir.exists():
+                raise RuntimeError(f"Harbor output directory already exists: {output_dir}")
+
+        trial_name = str(uuid4().hex)
+        trial_dir = _TEMP_TRIALS_DIR / trial_name
+        try:
+            return await self._run_trial(
+                config,
+                _TEMP_TRIALS_DIR,
+                trial_name=trial_name,
+                output_dir=output_dir,
+            )
+        finally:
+            await asyncio.to_thread(shutil.rmtree, trial_dir, ignore_errors=True)
+
+    async def _run_trial(
+        self,
+        config: HarborTaskConfig,
+        trials_dir: Path,
+        *,
+        trial_name: str,
+        output_dir: Path | None,
+    ) -> TaskResult:
         instance_id = str(config.metadata["instance_id"])
-        trial_name = f"uni-agent-{uuid4().hex}"
-        trial_dir = config.trials_dir / trial_name
-        command = build_harbor_trial_command(config, trial_name=trial_name)
+        trial_dir = trials_dir / trial_name
+        command = build_harbor_trial_command(config, trial_name=trial_name, trials_dir=trials_dir)
         process_env = build_harbor_process_env(config)
 
         try:
-            await asyncio.to_thread(config.trials_dir.mkdir, parents=True, exist_ok=True)
+            await asyncio.to_thread(trials_dir.mkdir, parents=True, exist_ok=True)
         except OSError as exc:
-            raise RuntimeError(f"failed to create Harbor trials directory {config.trials_dir}: {exc}") from exc
+            raise RuntimeError(f"failed to create Harbor trials directory {trials_dir}: {exc}") from exc
 
         logger.info(
-            "starting Harbor trial (instance_id=%s, agent=%s, model=%s, environment=%s, trial=%s)",
+            "starting Harbor trial (instance_id=%s, agent=%s, model=%s, environment=%s, trial=%s, trials_dir=%s)",
             instance_id,
             config.agent.name,
             None if config.agent.name == "oracle" else config.agent.model.model_name,
             config.harbor_env,
             trial_name,
+            trials_dir,
         )
         started = time.perf_counter()
         try:
@@ -178,6 +211,13 @@ class HarborTask(Task):
                 "Harbor CLI executable was not found; install Harbor 0.20 or later and ensure `harbor` is on PATH"
             ) from exc
         elapsed = time.perf_counter() - started
+
+        if output_dir is not None and trial_dir.is_dir():
+            try:
+                await asyncio.to_thread(shutil.move, str(trial_dir), str(output_dir))
+            except OSError as exc:
+                raise RuntimeError(f"failed to move Harbor trial output to {output_dir}: {exc}") from exc
+            trial_dir = output_dir
 
         result_path = trial_dir / "result.json"
         try:
@@ -195,6 +235,13 @@ class HarborTask(Task):
             raise RuntimeError(f"Harbor wrote an invalid trial result at {result_path}") from exc
         if not isinstance(payload, dict):
             raise RuntimeError(f"Harbor trial result at {result_path} is not a JSON object")
+        if output_dir is not None:
+            payload["trial_uri"] = trial_dir.resolve().as_uri()
+            await asyncio.to_thread(
+                result_path.write_text,
+                json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
 
         result = task_result_from_harbor_trial(
             payload,

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from .context import LogContext, _current_log_id
+from .context import LogContext, _current_log_context
 from .handlers import _add_file_handler, _cleanup_handler, _dispatch, _install_console_sink
 
 # Chatty libraries (incl. Modal's gRPC stack) pinned to WARNING to keep logs on the agent.
@@ -52,11 +52,16 @@ class sample_logging:
         _ensure_process_logging()
         if self.log_path is not None:
             _add_file_handler(self.log_path, self.log_id)
-        self._token = _current_log_id.set(self.log_id)
+        self._token = _current_log_context.set(
+            LogContext(
+                log_id=self.log_id,
+                log_path=str(self.log_path) if self.log_path is not None else None,
+            )
+        )
 
     def _exit(self) -> None:
         if self._token is not None:
-            _current_log_id.reset(self._token)
+            _current_log_context.reset(self._token)
             self._token = None
         if self.log_path is not None:
             _cleanup_handler(self.log_id)
