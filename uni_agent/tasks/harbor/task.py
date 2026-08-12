@@ -30,6 +30,7 @@ class HarborAgentConfig(AgentConfig):
     """Harbor agent name and model endpoint."""
 
     name: str = Field(default="", description="Harbor built-in agent name or custom agent import path.")
+    kwargs: dict[str, Any] = Field(default_factory=dict, description="Keyword arguments passed to the Harbor agent.")
 
 
 class HarborTaskConfig(TaskConfig):
@@ -103,6 +104,12 @@ def build_harbor_trial_command(
 
     if config.agent.name != "oracle" and config.agent.model.model_name:
         command.extend(["--model", config.agent.model.model_name])
+    for key, value in sorted(config.agent.kwargs.items()):
+        try:
+            encoded_value = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Harbor agent kwarg {key!r} is not JSON serializable") from exc
+        command.extend(["--agent-kwarg", f"{key}={encoded_value}"])
     return command
 
 
