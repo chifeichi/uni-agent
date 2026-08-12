@@ -31,6 +31,7 @@ class HarborAgentConfig(AgentConfig):
 
     name: str = Field(default="", description="Harbor built-in agent name or custom agent import path.")
     kwargs: dict[str, Any] = Field(default_factory=dict, description="Keyword arguments passed to the Harbor agent.")
+    timeout_sec: float | None = Field(default=None, gt=0, description="Harbor agent execution timeout in seconds.")
 
 
 class HarborTaskConfig(TaskConfig):
@@ -41,6 +42,8 @@ class HarborTaskConfig(TaskConfig):
     harbor_env: str = Field(default="docker", description="Harbor environment backend.")
     agent: HarborAgentConfig = Field(default_factory=HarborAgentConfig)
     timeout_multiplier: float = Field(default=1.0, gt=0)
+    override_cpus: int | None = Field(default=None, gt=0)
+    override_memory_mb: int | None = Field(default=None, gt=0)
 
     @field_validator("agent", mode="before")
     @classmethod
@@ -104,6 +107,12 @@ def build_harbor_trial_command(
 
     if config.agent.name != "oracle" and config.agent.model.model_name:
         command.extend(["--model", config.agent.model.model_name])
+    if config.agent.timeout_sec is not None:
+        command.extend(["--agent-timeout", f"{config.agent.timeout_sec:g}"])
+    if config.override_cpus is not None:
+        command.extend(["--override-cpus", str(config.override_cpus)])
+    if config.override_memory_mb is not None:
+        command.extend(["--override-memory-mb", str(config.override_memory_mb)])
     for key, value in sorted(config.agent.kwargs.items()):
         try:
             encoded_value = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
