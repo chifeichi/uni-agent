@@ -66,7 +66,20 @@ class _LogFileDispatch(logging.Handler):
         self._thread.start()
 
     def _reinit_after_fork(self) -> None:
-        # child lost the writer thread; the parent owns the inherited files, so start clean
+        # The child inherited copies of the parent's buffered file objects. Closing them
+        # normally would flush the copied buffers and duplicate pre-fork log lines, so
+        # close the raw descriptors first and then discard the wrappers.
+        for file_obj in list(self._files.values()):
+            try:
+                os.close(file_obj.fileno())
+            except (OSError, ValueError):
+                pass
+            try:
+                file_obj.close()
+            except (OSError, ValueError):
+                pass
+
+        # The child lost the writer thread; start with independent routing state.
         self._log_ids = set()
         self._lock = threading.Lock()
         self._dropped = 0
