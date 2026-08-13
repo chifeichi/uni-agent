@@ -167,6 +167,9 @@ The endpoint must be reachable from the Harbor agent process.
 
 ### Gateway Rollout
 
+!!! note "Not yet validated"
+    This Harbor + Gateway workflow has not yet been validated end to end.
+
 The following example evaluates `Qwen3.6-35B-A3B` on SWE-bench Pro with OpenHands through the Uni-Agent Gateway:
 
 ```bash
