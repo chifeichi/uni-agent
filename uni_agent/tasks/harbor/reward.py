@@ -123,6 +123,6 @@ def task_result_from_harbor_trial(
     return TaskResult(
         reward=scalar_reward,
         accuracy=scalar_reward,
-        finished=cli_exit_code == 0 and exception is None,
+        finished=None,
         extra_info=extra_info,
     )

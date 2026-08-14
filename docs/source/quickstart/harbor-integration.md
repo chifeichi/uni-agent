@@ -192,6 +192,9 @@ ray job submit --no-wait \
     --concurrency 512
 ```
 
+!!! note "Dataset availability"
+    Ensure that `--data-path` points to a readable Parquet file at the same path on every Ray worker. Use a shared filesystem path or replicate the dataset to each worker.
+
 The runner launches the model engine, injects a session-scoped Gateway endpoint, and captures token-level trajectories. OpenHands must be able to reach the Gateway from its Harbor environment.
 
 ## Results and Rewards
