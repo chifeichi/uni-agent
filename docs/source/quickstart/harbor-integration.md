@@ -165,6 +165,9 @@ python examples/inference/parallel_infer_api.py \
 
 The endpoint must be reachable from the Harbor agent process.
 
+!!! success "Result"
+    Terminus-2 with `GLM-5.2-733B-A40B` achieved a **67.4** score on Terminal-Bench 2.1.
+
 ### Gateway Rollout
 
 !!! note "Not yet validated"

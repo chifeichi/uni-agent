@@ -24,6 +24,23 @@ from .reward import task_result_from_harbor_trial
 
 logger = logging.getLogger(__name__)
 _TEMP_TRIALS_DIR = Path("/tmp/harbor-trials")
+_MODEL_BASE_URL_ENV_VARS = (
+    "LLM_BASE_URL",
+    "OPENAI_BASE_URL",
+    "OPENAI_API_BASE",
+    "HOSTED_VLLM_BASE_URL",
+    "HOSTED_VLLM_API_BASE",
+    "VLLM_API_BASE",
+    "ANTHROPIC_BASE_URL",
+    "ANTHROPIC_API_BASE",
+)
+_MODEL_API_KEY_ENV_VARS = (
+    "LLM_API_KEY",
+    "OPENAI_API_KEY",
+    "HOSTED_VLLM_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
+)
 
 
 class HarborAgentConfig(AgentConfig):
@@ -123,15 +140,15 @@ def build_harbor_trial_command(
 
 
 def build_harbor_process_env(config: HarborTaskConfig) -> dict[str, str] | None:
-    """Map the runtime model endpoint into Harbor's host process environment."""
+    """Expose the runtime model endpoint under compatible Harbor aliases."""
     if config.agent.name == "oracle":
         return None
 
     process_env: dict[str, str] = {}
     if config.agent.model.base_url:
-        process_env["OPENAI_BASE_URL"] = config.agent.model.base_url
+        process_env.update(dict.fromkeys(_MODEL_BASE_URL_ENV_VARS, config.agent.model.base_url))
     if config.agent.model.api_key:
-        process_env["OPENAI_API_KEY"] = config.agent.model.api_key
+        process_env.update(dict.fromkeys(_MODEL_API_KEY_ENV_VARS, config.agent.model.api_key))
     return process_env or None
 
 
