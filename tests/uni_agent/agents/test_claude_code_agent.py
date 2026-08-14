@@ -119,37 +119,108 @@ def test_run_uses_sandbox_default_workdir():
             base_url="https://ark.example/api/compatible",
             api_key="ark-test-api-key",
             model_name="policy",
-        )
+        ),
+        agent_timeout=123.0,
     )
     sandbox = _FakeSandbox(probe_results=[0])
 
     result = asyncio.run(
         ClaudeCodeAgent(config).run(
             sandbox=sandbox,
-            messages=[{"role": "user", "content": "fix the bug"}],
+            messages=[
+                {"role": "system", "content": "ignored system prompt"},
+                {"role": "user", "content": "fix the bug"},
+            ],
         )
     )
 
     assert result.finished is True
     assert len(sandbox.exec_calls) == 1
     assert sandbox.exec_calls[0]["workdir"] is None
+    assert sandbox.exec_calls[0]["timeout"] == 123.0
     argv = sandbox.exec_calls[0]["argv"]
     assert argv[:2] == ["claude", "-p"]
+    assert argv[2] == "fix the bug"
     assert argv[argv.index("--model") + 1] == "policy"
     assert argv[argv.index("--permission-mode") + 1] == "bypassPermissions"
     assert "--bare" not in argv
     assert "--no-session-persistence" not in argv
-    assert "--disable-slash-commands" not in argv
+    assert "--disable-slash-commands" in argv
+    assert "--append-system-prompt" not in argv
     assert "--dangerously-skip-permissions" not in argv
     disallowed_tools = argv[argv.index("--disallowedTools") + 1].split(",")
     assert set(disallowed_tools) == {"Agent", "Task", "WebFetch", "WebSearch", "AskUserQuestion"}
     assert sandbox.exec_calls[0]["env"]["ANTHROPIC_BASE_URL"] == "https://ark.example/api/compatible"
-    assert sandbox.exec_calls[0]["env"]["ANTHROPIC_API_KEY"] == ""
+    assert "ANTHROPIC_API_KEY" not in sandbox.exec_calls[0]["env"]
     assert sandbox.exec_calls[0]["env"]["ANTHROPIC_AUTH_TOKEN"] == "ark-test-api-key"
     assert sandbox.exec_calls[0]["env"]["CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"] == "1"
     assert sandbox.exec_calls[0]["env"]["CLAUDE_CODE_ATTRIBUTION_HEADER"] == "0"
-    assert sandbox.exec_calls[0]["env"]["CLAUDE_CODE_FORK_SUBAGENT"] == "0"
+    assert sandbox.exec_calls[0]["env"]["CLAUDE_CODE_DISABLE_BACKGROUND_TASKS"] == "1"
     assert sandbox.exec_calls[0]["env"]["CLAUDE_CODE_SKIP_PROMPT_HISTORY"] == "1"
+    assert sandbox.exec_calls[0]["env"]["CLAUDE_CODE_DISABLE_TERMINAL_TITLE"] == "1"
+
+
+def test_run_requires_system_then_user_messages():
+    config = ClaudeCodeConfig(
+        model=ModelConfig(base_url="http://gateway:8000/v1", model_name="policy"),
+    )
+    sandbox = _FakeSandbox(probe_results=[])
+
+    with pytest.raises(AssertionError):
+        asyncio.run(
+            ClaudeCodeAgent(config).run(
+                sandbox=sandbox,
+                messages=[{"role": "user", "content": "fix the bug"}],
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    ("enable_web_tools", "enable_subagents", "expected_disallowed"),
+    [
+        (True, False, {"Agent", "Task", "AskUserQuestion"}),
+        (False, True, {"WebFetch", "WebSearch", "AskUserQuestion"}),
+        (True, True, {"AskUserQuestion"}),
+    ],
+)
+def test_claude_argv_controls_web_tools_and_subagents_independently(
+    enable_web_tools,
+    enable_subagents,
+    expected_disallowed,
+):
+    config = ClaudeCodeConfig(
+        model=ModelConfig(model_name="policy"),
+        enable_web_tools=enable_web_tools,
+        enable_subagents=enable_subagents,
+    )
+
+    argv = ClaudeCodeAgent(config)._claude_argv("fix the bug")
+
+    disallowed_tools = argv[argv.index("--disallowedTools") + 1].split(",")
+    assert set(disallowed_tools) == expected_disallowed
+
+
+@pytest.mark.parametrize(("enable_subagents", "expected_model"), [(False, None), (True, "policy")])
+def test_claude_env_pins_enabled_subagents_to_policy_model(enable_subagents, expected_model):
+    config = ClaudeCodeConfig(
+        model=ModelConfig(model_name="policy"),
+        enable_subagents=enable_subagents,
+    )
+
+    env = ClaudeCodeAgent(config)._claude_env("http://gateway:8000")
+
+    assert env.get("CLAUDE_CODE_SUBAGENT_MODEL") == expected_model
+
+
+def test_claude_argv_can_keep_slash_commands_enabled():
+    config = ClaudeCodeConfig(
+        model=ModelConfig(model_name="policy"),
+        disable_slash_commands=False,
+    )
+
+    argv = ClaudeCodeAgent(config)._claude_argv("fix the bug")
+
+    assert "--disable-slash-commands" not in argv
 
 
 def test_run_reports_nonzero_process_exit():
@@ -161,7 +232,10 @@ def test_run_reports_nonzero_process_exit():
     result = asyncio.run(
         ClaudeCodeAgent(config).run(
             sandbox=sandbox,
-            messages=[{"role": "user", "content": "fix the bug"}],
+            messages=[
+                {"role": "system", "content": "ignored system prompt"},
+                {"role": "user", "content": "fix the bug"},
+            ],
         )
     )
 
@@ -174,6 +248,6 @@ def test_claude_env_uses_placeholders_for_session_gateway():
 
     env = ClaudeCodeAgent(config)._claude_env("http://gateway:8000")
 
-    assert env["ANTHROPIC_API_KEY"] == "sk-ant-uni-agent-placeholder"
+    assert "ANTHROPIC_API_KEY" not in env
     assert env["ANTHROPIC_AUTH_TOKEN"]
     assert env["ANTHROPIC_AUTH_TOKEN"] != "EMPTY"

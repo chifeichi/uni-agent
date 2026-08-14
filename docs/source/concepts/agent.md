@@ -95,7 +95,7 @@ Claude Code sets `AgentResult.finished=true` when the process exits with code `0
 agent:
   name: claude_code
   max_turns: 200
-  run_timeout: 4800
+  agent_timeout: 4800
   model:
     temperature: 1.0
     top_p: 0.95
