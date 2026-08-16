@@ -61,6 +61,29 @@ def _strip_v1(base_url: str) -> str:
     return b[:-3].rstrip("/") if b.endswith("/v1") else b
 
 
+def _build_claude_prompt(problem_statement: str) -> str:
+    """Use the raw issue description when the task prompt wraps it in XML tags."""
+    start_tag = "<issue_description>"
+    end_tag = "</issue_description>"
+    start = problem_statement.find(start_tag)
+    end = problem_statement.find(end_tag, start + len(start_tag)) if start >= 0 else -1
+    if start < 0 or end < 0:
+        return problem_statement
+
+    issue = problem_statement[start + len(start_tag) : end].strip()
+    if not issue:
+        return problem_statement
+
+    return (
+        "Read the following task description and resolve the issue in the current directory.\n\n"
+        "Task description:\n"
+        f"{issue}\n\n"
+        "Inspect the relevant code, make the minimal correct changes, and verify the result with appropriate tests or checks. "
+        "Do not modify tests or commit changes. "
+        "When finished, briefly summarize what changed and how it was verified."
+    )
+
+
 class ClaudeCodeConfig(AgentConfig):
     """Black-box launch params for Claude Code (policy endpoint lives on :attr:`AgentConfig.model`)."""
 
@@ -109,7 +132,7 @@ class ClaudeCodeAgent(Agent):
 
         # Point claude at the Anthropic endpoint (gateway session or vLLM) and run it.
         endpoint = _strip_v1(base_url)
-        argv = self._claude_argv(problem_statement)
+        argv = self._claude_argv(_build_claude_prompt(problem_statement))
         env = self._claude_env(endpoint)
         logger.info("claude_code: launch (endpoint=%s)", endpoint)
         proc = await sandbox.exec(argv, env=env, timeout=cfg.agent_timeout)
@@ -196,6 +219,12 @@ class ClaudeCodeAgent(Agent):
             "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1",
             "CLAUDE_CODE_SKIP_PROMPT_HISTORY": "1",
             "CLAUDE_CODE_DISABLE_TERMINAL_TITLE": "1",
+            "NO_PROXY": "*",
+            "no_proxy": "*",
+            "HTTP_PROXY": "",
+            "http_proxy": "",
+            "HTTPS_PROXY": "",
+            "https_proxy": "",
         }
         if cfg.enable_subagents:
             env["CLAUDE_CODE_SUBAGENT_MODEL"] = model
