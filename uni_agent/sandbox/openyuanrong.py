@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from .base import SandboxConfig
 
 logger = logging.getLogger(__name__)
+logger.setLevel(os.getenv("VERL_LOGGING_LEVEL", "INFO"))
 
 _sdk_initialized = False
 
@@ -108,10 +109,10 @@ class OpenyuanrongSandbox(Sandbox):
         *,
         image: str,
         runtime_timeout: float = 3600.0,
-        cpu: int = 1000,
-        memory: int = 2048,
-        cpu_limit: int = 4000,
-        mem_limit: int = 8192,
+        cpu: int = 2000,
+        memory: int = 4096,
+        cpu_limit: int = 8000,
+        mem_limit: int = 12288,
         idle_timeout: int = 7200,
         env: dict[str, str] | None = None,
         cwd: str | None = None,

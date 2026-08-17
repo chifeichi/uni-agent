@@ -12,20 +12,20 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="${REPO_ROOT:-$(cd "${SCRIPT_DIR}/../../.." && pwd)}"
+REPO_ROOT="/mnt/share/t00986241/new_release/uni-agent"
 cd "${REPO_ROOT}"
 
 # ── Model & data ─────────────────────────────────────────────────────────
-MODEL_PATH="${MODEL_PATH:-${HOME}/models/Qwen3.5-9B}"
-TRAIN_DATA="${TRAIN_DATA:-${HOME}/data/swe_agent/swe_rebench_filtered.parquet}"
-VAL_DATA="${VAL_DATA:-${HOME}/data/swe_agent/swe_bench_verified.parquet}"
+MODEL_PATH="${MODEL_PATH:-/mnt/share/weights/Qwen3.5-9B}"
+TRAIN_DATA="${TRAIN_DATA:-/mnt/share/t00986241/swe_rebench_filtered_modified_yuanrong.parquet}"
+VAL_DATA="${VAL_DATA:-/mnt/share/t00986241/swe_bench_verified_modified_yuanrong.parquet}"
 RUNTIME_ENV="${RUNTIME_ENV:-}"
 
 # ── V1 trainer ───────────────────────────────────────────────────────────
-TRAINER_MODE="${TRAINER_MODE:-separate_async}"
+TRAINER_MODE="${TRAINER_MODE:-sync}"
 NUM_WARMUP_BATCHES="${NUM_WARMUP_BATCHES:-1}"
 SEPARATE_NUM_WARMUP_BATCHES="${SEPARATE_NUM_WARMUP_BATCHES:-${NUM_WARMUP_BATCHES}}"
-PARAMETER_SYNC_STEP="${PARAMETER_SYNC_STEP:-4}"
+PARAMETER_SYNC_STEP="${PARAMETER_SYNC_STEP:-1}"
 RAY_SUBMIT_MODE="${RAY_SUBMIT_MODE:-job}"
 RAY_INIT_ADDRESS="${RAY_INIT_ADDRESS:-auto}"
 RAY_STATUS_TIMEOUT="${RAY_STATUS_TIMEOUT:-5}"
@@ -33,11 +33,11 @@ CONFIG_NAME="${CONFIG_NAME:-claude_code_megatron_v1}"
 
 # ── Hardware ─────────────────────────────────────────────────────────────
 NNODES="${NNODES:-${NNODES_TRAIN:-1}}"
-PHYSICAL_GPUS_PER_NODE="${PHYSICAL_GPUS_PER_NODE:-8}"
+PHYSICAL_GPUS_PER_NODE="${PHYSICAL_GPUS_PER_NODE:-16}"
 if [[ "${TRAINER_MODE}" == "separate_async" ]]; then
-    N_GPUS_PER_NODE="${N_GPUS_PER_NODE:-${TRAIN_NGPUS_PER_NODE:-4}}"
+    N_GPUS_PER_NODE="${N_GPUS_PER_NODE:-${TRAIN_NGPUS_PER_NODE:-8}}"
     ROLLOUT_NNODES="${ROLLOUT_NNODES:-${NNODES_ROLLOUT:-${NNODES}}}"
-    ROLLOUT_NGPUS_PER_NODE="${ROLLOUT_NGPUS_PER_NODE:-${NGPUS_PER_NODE_ROLLOUT:-4}}"
+    ROLLOUT_NGPUS_PER_NODE="${ROLLOUT_NGPUS_PER_NODE:-${NGPUS_PER_NODE_ROLLOUT:-8}}"
 else
     N_GPUS_PER_NODE="${N_GPUS_PER_NODE:-${TRAIN_NGPUS_PER_NODE:-${PHYSICAL_GPUS_PER_NODE}}}"
     ROLLOUT_NNODES="${ROLLOUT_NNODES:-${NNODES_ROLLOUT:-0}}"
@@ -57,9 +57,9 @@ MAX_MODEL_LEN=$((PROMPT_LENGTH + RESPONSE_LENGTH))
 # ── Rollout parameters ───────────────────────────────────────────────────
 ENGINE="${ENGINE:-vllm}"
 if [[ "${TRAINER_MODE}" == "separate_async" ]]; then
-    GEN_TP="${GEN_TP:-${TP:-${ROLLOUT_NGPUS_PER_NODE}}}"
+    GEN_TP="${GEN_TP:-${TP:-4}}"
 else
-    GEN_TP="${GEN_TP:-${TP:-2}}"
+    GEN_TP="${GEN_TP:-${TP:-4}}"
 fi
 N="${N:-8}"
 TEMPERATURE="${TEMPERATURE:-1.0}"
@@ -70,16 +70,16 @@ UPDATE_WEIGHTS_BUCKET_MB="${UPDATE_WEIGHTS_BUCKET_MB:-2048}"
 
 # ── Megatron training parallelism ────────────────────────────────────────
 if [[ "${TRAINER_MODE}" == "separate_async" ]]; then
-    TRAIN_TP="${TRAIN_TP:-${TP:-${N_GPUS_PER_NODE}}}"
+    TRAIN_TP="${TRAIN_TP:-${TP:-4}}"
 else
-    TRAIN_TP="${TRAIN_TP:-${TP:-8}}"
+    TRAIN_TP="${TRAIN_TP:-${TP:-4}}"
 fi
 TRAIN_PP="${TRAIN_PP:-1}"
-TRAIN_CP="${TRAIN_CP:-1}"
+TRAIN_CP="${TRAIN_CP:-2}"
 OFFLOAD="${OFFLOAD:-True}"
 OPTIMIZER_OFFLOAD_FRACTION="${OFFLOAD_FRACTION:-1.0}"
 USE_MBRIDGE="${USE_MBRIDGE:-True}"
-PPO_MINI_BATCH_SIZE="${PPO_MINI_BATCH_SIZE:-16}"
+PPO_MINI_BATCH_SIZE="${PPO_MINI_BATCH_SIZE:-8}"
 
 # ── Agent parameters ─────────────────────────────────────────────────────
 # AGENT_MAX_TURNS is the agent's turn budget inside the sandbox: it becomes
@@ -91,17 +91,16 @@ RUNNER="${RUNNER:-claude_code}"
 AGENT_MAX_TURNS="${AGENT_MAX_TURNS:-100}"
 if [[ "${RUNNER}" == "claude_code" ]]; then
     AGENT_RUNNER_FQN="examples.blackbox_recipes.claude_code.claude_code_runner.claude_code_runner"
-    CLAUDE_CODE_TOOL_IMAGE="${CLAUDE_CODE_TOOL_IMAGE:-swr.cn-east-3.myhuaweicloud.com/openyuanrong/claude-code-tool:latest}"
-    CLAUDE_CODE_PROXY_PORT="${CLAUDE_CODE_PROXY_PORT:-38197}"
+    CLAUDE_CODE_TOOL_IMAGE="${CLAUDE_CODE_TOOL_IMAGE:-7.227.53.47:8091/openyuanrong/claude-code-tool:latest}"
 else
     echo "Unknown RUNNER=${RUNNER}; this recipe currently supports claude_code only" >&2
     exit 1
 fi
 SWE_AGENT_RUN_TIMEOUT="${SWE_AGENT_RUN_TIMEOUT:-7200}"
 CONDA_ENV="${CONDA_ENV:-testbed}"
-GATEWAY_COUNT="${GATEWAY_COUNT:-1}"
-MAX_CONCURRENT_SESSIONS="${MAX_CONCURRENT_SESSIONS:-32}"
-NUM_AGENT_WORKERS="${NUM_AGENT_WORKERS:-8}"
+GATEWAY_COUNT="${GATEWAY_COUNT:-2}"
+MAX_CONCURRENT_SESSIONS="${MAX_CONCURRENT_SESSIONS:-64}"
+NUM_AGENT_WORKERS="${NUM_AGENT_WORKERS:-32}"
 RUNNER_ARGS=(
     "actor_rollout_ref.rollout.agent.agent_loop_manager_class=uni_agent.framework.entry.AgentFrameworkRolloutAdapter"
     "actor_rollout_ref.rollout.custom.agent_framework.gateway_count=${GATEWAY_COUNT}"
@@ -111,26 +110,25 @@ RUNNER_ARGS=(
     "actor_rollout_ref.rollout.custom.agent_framework.agent_runners.claude_code.runner_kwargs.tool_image=${CLAUDE_CODE_TOOL_IMAGE}"
     "actor_rollout_ref.rollout.custom.agent_framework.agent_runners.claude_code.runner_kwargs.run_timeout=${SWE_AGENT_RUN_TIMEOUT}"
     "actor_rollout_ref.rollout.custom.agent_framework.agent_runners.claude_code.runner_kwargs.conda_env=${CONDA_ENV}"
-    "actor_rollout_ref.rollout.custom.agent_framework.agent_runners.claude_code.runner_kwargs.proxy_port=${CLAUDE_CODE_PROXY_PORT}"
 )
 
-# ── OpenYuanrong (remote sandbox) ───────────────────────────────────────
-OPENYUANRONG_SERVER_ADDRESS="${OPENYUANRONG_SERVER_ADDRESS:-}"
-OPENYUANRONG_TOKEN="${OPENYUANRONG_TOKEN:-}"
-OPENYUANRONG_TUNNEL_SSL_VERIFY="${OPENYUANRONG_TUNNEL_SSL_VERIFY:-0}"
+# ── AKernel (remote sandbox) ─────────────────────────────────────────────
+AKERNEL_SERVER_ADDRESS="${AKERNEL_SERVER_ADDRESS:-}"
+AKERNEL_TOKEN="${AKERNEL_TOKEN:-}"
+AKERNEL_TUNNEL_SSL_VERIFY="${AKERNEL_TUNNEL_SSL_VERIFY:-0}"
 
 # ── Logging & checkpointing ──────────────────────────────────────────────
-PROJECT_NAME="${PROJECT_NAME:-claude_code}"
-EXPERIMENT_NAME="${EXPERIMENT_NAME:-claude_code_$(date +%Y%m%d_%H%M)}"
+PROJECT_NAME="${PROJECT_NAME:-tcx_claude_code}"
+EXPERIMENT_NAME="${EXPERIMENT_NAME:-tcx_claude_code_$(date +%Y%m%d_%H%M)}"
 SAVE_FREQ="${SAVE_FREQ:-10}"
 TEST_FREQ="${TEST_FREQ:-10}"
 TOTAL_EPOCHS="${TOTAL_EPOCHS:-10}"
 TOTAL_TRAINING_STEPS="${TOTAL_TRAINING_STEPS:-}"
-VAL_BEFORE_TRAIN="${VAL_BEFORE_TRAIN:-true}"
+VAL_BEFORE_TRAIN="false"
 CKPTS_DIR="${CKPTS_DIR:-checkpoints/${PROJECT_NAME}/${EXPERIMENT_NAME}}"
 TRAIN_MAX_SAMPLES="${TRAIN_MAX_SAMPLES:-${MAX_SAMPLES:--1}}"
-VAL_MAX_SAMPLES="${VAL_MAX_SAMPLES:-${MAX_SAMPLES:--1}}"
-TRAIN_BATCH_SIZE="${TRAIN_BATCH_SIZE:-${PPO_MINI_BATCH_SIZE}}"
+VAL_MAX_SAMPLES="${VAL_MAX_SAMPLES:-${MAX_SAMPLES:-2}}"
+TRAIN_BATCH_SIZE="${TRAIN_BATCH_SIZE:-16}"
 VAL_BATCH_SIZE="${VAL_BATCH_SIZE:-${TRAIN_BATCH_SIZE}}"
 
 export AGENT_MAX_TURNS
@@ -139,10 +137,18 @@ export CLAUDE_CODE_TOOL_IMAGE
 export SWE_AGENT_RUN_TIMEOUT
 export CONDA_ENV
 export GATEWAY_COUNT
-export OPENYUANRONG_SERVER_ADDRESS
-export OPENYUANRONG_TOKEN
-export OPENYUANRONG_TUNNEL_SSL_VERIFY
+export AKERNEL_SERVER_ADDRESS
+export AKERNEL_TOKEN
+export AKERNEL_TUNNEL_SSL_VERIFY
+export VERL_LOGGING_LEVEL="${VERL_LOGGING_LEVEL:-INFO}"
+export RAY_DEDUP_LOGS="${RAY_DEDUP_LOGS:-0}"
+export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
 export PYTHONPATH="${REPO_ROOT}:${REPO_ROOT}/verl:${PYTHONPATH:-}"
+export SANDBOX_NAME_PREFIX="tcx_test_sandbox"
+export RL_INSIGHT_SERVER_URL="http://80.5.25.124:18080"
+#unset ASCEND_USE_ASYNC_TRANSFER
+#export ASCEND_USE_SHORT_CONNECTION=1
+#export VERL_PD_ROUTING_LOG_EVERY=10
 
 echo "=== Claude Code Blackbox Megatron Async Training ==="
 echo "Model:       ${MODEL_PATH}"
@@ -151,7 +157,6 @@ echo "Val data:    ${VAL_DATA}"
 echo "Engine:      ${ENGINE} (gen_tp=${GEN_TP}, train_tp=${TRAIN_TP})"
 echo "Runner:      ${RUNNER}"
 echo "Tool image:  ${CLAUDE_CODE_TOOL_IMAGE}"
-echo "Proxy port:  ${CLAUDE_CODE_PROXY_PORT}"
 echo "Turns:       agent_max_turns=${AGENT_MAX_TURNS}"
 echo "Batch:       n=${N}, mini_bsz=${PPO_MINI_BATCH_SIZE}"
 echo "Sequence:    prompt=${PROMPT_LENGTH}, response=${RESPONSE_LENGTH}"
@@ -181,15 +186,18 @@ env_vars = {
     key: value
     for key in (
         "PYTHONPATH",
-        "OPENYUANRONG_SERVER_ADDRESS",
-        "OPENYUANRONG_TOKEN",
-        "OPENYUANRONG_TUNNEL_SSL_VERIFY",
+        "AKERNEL_SERVER_ADDRESS",
+        "AKERNEL_TOKEN",
+        "AKERNEL_TUNNEL_SSL_VERIFY",
         "AGENT_MAX_TURNS",
         "SWE_AGENT_EVAL_TIMEOUT",
         "SWE_AGENT_RUN_TIMEOUT",
         "CLAUDE_CODE_TOOL_IMAGE",
         "CONDA_ENV",
         "GATEWAY_COUNT",
+        "VERL_LOGGING_LEVEL",
+        "RAY_DEDUP_LOGS",
+        "PYTHONUNBUFFERED",
     )
     if (value := os.environ.get(key)) is not None
 }
@@ -208,18 +216,22 @@ if [[ "${TRAINER_MODE}" == "separate_async" ]]; then
 else
     TOTAL_GPUS=$(( NNODES * N_GPUS_PER_NODE ))
 fi
-if ! timeout "${RAY_STATUS_TIMEOUT}" ray status &>/dev/null; then
-    echo "Starting Ray cluster (${TOTAL_GPUS} GPUs)..."
-    ray start --head --num-gpus="${TOTAL_GPUS}" --disable-usage-stats
-else
-    echo "Ray cluster already running."
-fi
+
+ray stop
+ray start --head --disable-usage-stats
+#if ! timeout "${RAY_STATUS_TIMEOUT}" ray status &>/dev/null; then
+#    echo "Starting Ray cluster (${TOTAL_GPUS} GPUs)..."
+#    # ray start --head --num-gpus="${TOTAL_GPUS}" --disable-usage-stats
+#    ray start --head --resources='{"NPU": 8}' --disable-usage-stats
+#else
+#    echo "Ray cluster already running."
+#fi
 
 # ── Launch ────────────────────────────────────────────────────────────────
 WORKING_DIR="${WORKING_DIR:-$(pwd)}"
-
+echo ${REPO_ROOT}
 MAIN_CMD=(
-    python3 -m verl.trainer.main_ppo
+    python3 -m verl.trainer.main_ppo \
     --config-name="${CONFIG_NAME}" \
     --config-path="${REPO_ROOT}/examples/blackbox_recipes/claude_code/config" \
     hydra.searchpath=[pkg://verl.trainer.config] \
@@ -230,6 +242,7 @@ MAIN_CMD=(
     trainer.v1.separate_async.num_warmup_batches=${SEPARATE_NUM_WARMUP_BATCHES} \
     trainer.v1.separate_async.parameter_sync_step=${PARAMETER_SYNC_STEP} \
     transfer_queue.enable=True \
+    transfer_queue.metrics.enabled=True \
     actor_rollout_ref.model.path="${MODEL_PATH}" \
     data.train_files="['${TRAIN_DATA}']" \
     data.val_files="['${VAL_DATA}']" \
@@ -239,6 +252,7 @@ MAIN_CMD=(
     data.val_batch_size=${VAL_BATCH_SIZE} \
     data.max_prompt_length=${PROMPT_LENGTH} \
     data.max_response_length=${RESPONSE_LENGTH} \
+    actor_rollout_ref.rollout.disable_log_stats=False \
     actor_rollout_ref.rollout.n=${N} \
     actor_rollout_ref.rollout.name=${ENGINE} \
     actor_rollout_ref.rollout.prompt_length=${PROMPT_LENGTH} \
@@ -253,6 +267,12 @@ MAIN_CMD=(
     actor_rollout_ref.rollout.n_gpus_per_node=${ROLLOUT_NGPUS_PER_NODE} \
     actor_rollout_ref.rollout.tensor_model_parallel_size=${GEN_TP} \
     actor_rollout_ref.rollout.gpu_memory_utilization=${ROLLOUT_GPU_MEM_UTIL} \
+    # actor_rollout_ref.hybrid_engine=True \
+    +actor_rollout_ref.rollout.engine_kwargs.vllm.compilation_config.cudagraph_mode="FULL_DECODE_ONLY" \
+    # +actor_rollout_ref.rollout.engine_kwargs.vllm.mamba_cache_mode=align \
+    +actor_rollout_ref.rollout.engine_kwargs.vllm.additional_config.enable_cpu_binding=true \
+    +actor_rollout_ref.rollout.engine_kwargs.vllm.async_scheduling=true \
+    actor_rollout_ref.rollout.multi_turn.max_assistant_turns=${AGENT_MAX_TURNS} \
     actor_rollout_ref.rollout.agent.num_workers=${NUM_AGENT_WORKERS} \
     "${RUNNER_ARGS[@]}" \
     actor_rollout_ref.actor.clip_ratio_low=${CLIP_RATIO_LOW} \
@@ -275,10 +295,12 @@ MAIN_CMD=(
     actor_rollout_ref.ref.megatron.tensor_model_parallel_size=${TRAIN_TP} \
     actor_rollout_ref.ref.megatron.pipeline_model_parallel_size=${TRAIN_PP} \
     actor_rollout_ref.ref.megatron.context_parallel_size=${TRAIN_CP} \
+    actor_rollout_ref.rollout.calculate_log_probs=True \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=1 \
     actor_rollout_ref.rollout.log_prob_max_token_len_per_gpu=${INFER_PPO_MAX_TOKEN_LEN} \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=1 \
     actor_rollout_ref.ref.log_prob_max_token_len_per_gpu=${INFER_PPO_MAX_TOKEN_LEN} \
+    trainer.logger='["console","rl_insight"]' \
     trainer.project_name="${PROJECT_NAME}" \
     trainer.experiment_name="${EXPERIMENT_NAME}" \
     trainer.total_epochs=${TOTAL_EPOCHS} \
@@ -288,6 +310,19 @@ MAIN_CMD=(
     trainer.default_local_dir="${CKPTS_DIR}" \
     trainer.nnodes=${NNODES} \
     trainer.n_gpus_per_node=${N_GPUS_PER_NODE} \
+    # global_profiler.tool=npu \
+    # global_profiler.steps="[1,2,5]" \
+    # global_profiler.save_path="/home/t00986241/profiles" \
+    # actor_rollout_ref.actor.profiler.enable=True \
+    # actor_rollout_ref.actor.profiler.ranks="[0]" \
+    # actor_rollout_ref.actor.profiler.all_ranks=False \
+    # actor_rollout_ref.actor.profiler.tool_config.npu.discrete=True \
+    # actor_rollout_ref.actor.profiler.tool_config.npu.contents=['npu','cpu'] \
+    # actor_rollout_ref.actor.profiler.tool_config.npu.level=level0 \
+    # actor_rollout_ref.actor.profiler.tool_config.npu.analysis=True \
+    # actor_rollout_ref.rollout.profiler.enable=True \
+    # actor_rollout_ref.rollout.profiler.ranks="[0]" \
+    # actor_rollout_ref.rollout.profiler.all_ranks=False \
     "$@"
 )
 
@@ -296,8 +331,7 @@ if [[ -n "${TOTAL_TRAINING_STEPS}" ]]; then
 fi
 
 if [[ "${RAY_SUBMIT_MODE}" == "job" ]]; then
-    ray job submit --no-wait --working-dir="${WORKING_DIR}" "${RUNTIME_ENV_ARGS[@]}" -- \
-        env RAY_OVERRIDE_JOB_RUNTIME_ENV=1 "${MAIN_CMD[@]}"
+    RAY_OVERRIDE_JOB_RUNTIME_ENV=1 ray job submit --no-wait --working-dir="${WORKING_DIR}" "${RUNTIME_ENV_ARGS[@]}" -- "${MAIN_CMD[@]}"
 elif [[ "${RAY_SUBMIT_MODE}" == "local" ]]; then
     "${MAIN_CMD[@]}"
 else
