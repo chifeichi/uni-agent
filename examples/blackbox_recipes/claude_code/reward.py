@@ -50,10 +50,12 @@ async def evaluate_in_env(
     data_source = metadata.get("data_source", "unknown")
     reward_model = metadata.get("reward_model", {})
 
-    if data_source != "swe_bench":
+    if data_source == "swe_bench":
+        from uni_agent.tasks.swe_bench.reward import compute_reward
+    elif data_source == "swe_rebench":
+        from uni_agent.tasks.swe_rebench.reward import compute_reward
+    else:
         raise ValueError(f"Unsupported reward data source: {data_source}")
-
-    from uni_agent.tasks.swe_bench.reward import compute_reward
 
     spec_metadata = reward_model.get("ground_truth", reward_model)
     result = await compute_reward(spec_metadata, env, eval_timeout=eval_timeout)
