@@ -155,6 +155,15 @@ def _load_config(
     ro.calculate_log_probs = True
     ro.enable_sleep_mode = False
 
+    max_capture_size = max(1, max_concurrent_sessions)
+    capture_sizes = [1]
+    while capture_sizes[-1] < max_capture_size:
+        capture_sizes.append(min(capture_sizes[-1] * 2, max_capture_size))
+    ro.engine_kwargs.vllm.compilation_config = {
+        "cudagraph_mode": "FULL_DECODE_ONLY",
+        "cudagraph_capture_sizes": capture_sizes,
+    }
+
     af = ro.custom.agent_framework
     af.gateway_count = gateway_count
     runner_name = next(iter(af.agent_runners.keys()))
