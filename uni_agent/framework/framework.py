@@ -730,29 +730,110 @@ class OpenAICompatibleAgentFramework(AgentFramework):
                     for traj, (score, extra) in zip(session_trajectories, annotations, strict=True)
                 ]
 
-            self._log_trajectory_summary(session_id, result_trajectories)
+            self._log_trajectory_summary(
+                session_id, 
+                result_trajectories,
+                sample_fields,
+                sample_index=sample_index,
+                session_index=session_index,
+            )
             if run_dir is not None:
                 await asyncio.to_thread(self._dump_trajectories, run_dir, session_id, result_trajectories)
             return result_trajectories, sample_fields
 
-    def _log_trajectory_summary(self, session_id: str, trajectories: list[Trajectory]) -> None:
+    @staticmethod
+    def _get_rollout_instance_id(sample_fields: dict[str, object]) -> str:
+        def nested_get(value: object, *path: str) -> object | None:
+            current = value
+            for key in path:
+                if not isinstance(current, dict):
+                    return None
+                current = current.get(key)
+            return current
+
+        candidates = (
+            sample_fields.get("instance_id"),
+            nested_get(sample_fields, "tools_kwargs", "task", "metadata", "instance_id"),
+            nested_get(sample_fields, "tools_kwargs", "reward", "metadata", "ground_truth", "instance_id"),
+            nested_get(sample_fields, "tools_kwargs", "reward", "metadata", "instance_id"),
+            nested_get(sample_fields, "reward_model", "ground_truth", "instance_id"),
+            nested_get(sample_fields, "extra_info", "instance_id"),
+        )
+        for candidate in candidates:
+            if candidate is not None and str(candidate):
+                return str(candidate)
+        return ""
+
+    def _log_trajectory_summary(
+        self,
+        session_id: str,
+        trajectories: list[Trajectory],
+        sample_fields: dict[str, object],
+        *,
+        sample_index: int,
+        session_index: int,
+    ) -> None:
         """Log a per-session trajectory summary -- the info the task layer can't emit,
         since trajectories exist only after the session finalizes."""
+        instance_id = self._get_rollout_instance_id(sample_fields)
+        uid = str(sample_fields.get("uid", ""))
         lines = [f"session {session_id}: {len(trajectories)} trajectory(ies)"]
         for i, traj in enumerate(trajectories):
             model_tokens = sum(traj.response_mask) if traj.response_mask else 0
-            finished = traj.reward_info.get("finished")
             reason = (traj.extra_fields or {}).get("materialization_reason")
+            reward_info = dict(traj.reward_info or {})
+            eval_report = reward_info.get("eval_report")
+            if not isinstance(eval_report, dict):
+                eval_report = {}
+            rollout_record = {
+                "instance_id": instance_id,
+                "uid": uid,
+                "session_id": session_id,
+                "sample_index": sample_index,
+                "session_index": session_index,
+                "trajectory_index": i,
+                "num_turns": traj.num_turns,
+                "prompt_tokens": len(traj.prompt_ids),
+                "response_tokens": len(traj.response_ids),
+                "model_tokens": model_tokens,
+                "total_tokens": len(traj.prompt_ids) + len(traj.response_ids),
+                "reward_score": traj.reward_score,
+                "claude_code_exit_code": reward_info.get("claude_code_exit_code"),
+                "eval_completed": reward_info.get("eval_completed"),
+                "eval_execution_time": reward_info.get("eval_execution_time"),
+                "resolved": reward_info.get("resolved"),
+                "found_eval_status": eval_report.get("found_eval_status"),
+                "materialization_reason": reason,
+            }
+            print(f"[ROLLOUT_SAMPLE] {json.dumps(rollout_record, ensure_ascii=False, default=str)}", flush=True)
             lines.append(
                 f"  [{i}] turns={traj.num_turns} prompt_tokens={len(traj.prompt_ids)} "
                 f"response_tokens={len(traj.response_ids)} model_tokens={model_tokens} "
-                f"finished={finished} "
                 f"logprobs={'yes' if traj.response_logprobs else 'no'} "
                 f"experts={'yes' if traj.routed_experts is not None else 'no'} "
                 f"reward_score={traj.reward_score} reward_info={traj.reward_info or {}}"
                 + (f" materialization_reason={reason}" if reason else "")
             )
         logger.info("\n".join(lines))
+    
+    # def _log_trajectory_summary(self, session_id: str, trajectories: list[Trajectory]) -> None:
+    #     """Log a per-session trajectory summary -- the info the task layer can't emit,
+    #     since trajectories exist only after the session finalizes."""
+    #     lines = [f"session {session_id}: {len(trajectories)} trajectory(ies)"]
+    #     for i, traj in enumerate(trajectories):
+    #         model_tokens = sum(traj.response_mask) if traj.response_mask else 0
+    #         finished = traj.reward_info.get("finished")
+    #         reason = (traj.extra_fields or {}).get("materialization_reason")
+    #         lines.append(
+    #             f"  [{i}] turns={traj.num_turns} prompt_tokens={len(traj.prompt_ids)} "
+    #             f"response_tokens={len(traj.response_ids)} model_tokens={model_tokens} "
+    #             f"finished={finished} "
+    #             f"logprobs={'yes' if traj.response_logprobs else 'no'} "
+    #             f"experts={'yes' if traj.routed_experts is not None else 'no'} "
+    #             f"reward_score={traj.reward_score} reward_info={traj.reward_info or {}}"
+    #             + (f" materialization_reason={reason}" if reason else "")
+    #         )
+    #     logger.info("\n".join(lines))
 
     def _dump_trajectories(self, run_dir: Path, session_id: str, trajectories: list[Trajectory]) -> None:
         """Persist finalized trajectories next to ``task.log``.
