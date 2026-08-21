@@ -12,7 +12,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="/mnt/share/t00986241/new_release/uni-agent"
+REPO_ROOT="/mnt/share/t00986241/cache_pool/uni-agent"
 cd "${REPO_ROOT}"
 
 # ── Model & data ─────────────────────────────────────────────────────────
@@ -127,6 +127,13 @@ AKERNEL_SERVER_ADDRESS="${AKERNEL_SERVER_ADDRESS:-}"
 AKERNEL_TOKEN="${AKERNEL_TOKEN:-}"
 AKERNEL_TUNNEL_SSL_VERIFY="${AKERNEL_TUNNEL_SSL_VERIFY:-0}"
 
+# Required by AscendStoreConnector when cache_pool.backend=mooncake.
+MOONCAKE_CONFIG_PATH="${MOONCAKE_CONFIG_PATH:-/mnt/share/t00986241/cache_pool/mooncake.json}"
+if [[ -z "${MOONCAKE_CONFIG_PATH}" ]]; then
+    echo "MOONCAKE_CONFIG_PATH must point to the Mooncake store JSON config." >&2
+    exit 1
+fi
+
 # ── Logging & checkpointing ──────────────────────────────────────────────
 SAVE_FREQ="${SAVE_FREQ:--1}"
 TEST_FREQ="${TEST_FREQ:--1}"
@@ -148,6 +155,7 @@ export GATEWAY_COUNT
 export AKERNEL_SERVER_ADDRESS
 export AKERNEL_TOKEN
 export AKERNEL_TUNNEL_SSL_VERIFY
+export MOONCAKE_CONFIG_PATH
 export VERL_LOGGING_LEVEL="${VERL_LOGGING_LEVEL:-INFO}"
 export RAY_DEDUP_LOGS="${RAY_DEDUP_LOGS:-0}"
 export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
@@ -211,6 +219,7 @@ env_vars = {
         "CLAUDE_CODE_TOOL_IMAGE",
         "CONDA_ENV",
         "GATEWAY_COUNT",
+        "MOONCAKE_CONFIG_PATH",
         "VERL_LOGGING_LEVEL",
         "RAY_DEDUP_LOGS",
         "PYTHONUNBUFFERED",
@@ -389,5 +398,4 @@ else
     echo "Unknown RAY_SUBMIT_MODE=${RAY_SUBMIT_MODE}; expected job or local" >&2
     exit 1
 fi
-
 
