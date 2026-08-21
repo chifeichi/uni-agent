@@ -367,13 +367,13 @@ MAIN_CMD=(
     actor_rollout_ref.rollout.disaggregation.decode_engine_kwargs.max_num_seqs=256 \
     actor_rollout_ref.rollout.disaggregation.decode_engine_kwargs.enforce_eager=False \
     actor_rollout_ref.rollout.disaggregation.decode_engine_kwargs.compilation_config.cudagraph_mode="FULL_DECODE_ONLY" \
-    ++actor_rollout_ref.rollout.disaggregation.cache_pool.enable=True \
-    ++actor_rollout_ref.rollout.disaggregation.cache_pool.backend=mooncake \
-    ++actor_rollout_ref.rollout.disaggregation.cache_pool.consumer_is_to_put=False \
-    ++actor_rollout_ref.rollout.disaggregation.cache_pool.store_decode_kv=False \
-    ++actor_rollout_ref.rollout.disaggregation.cache_pool.consumer_is_to_load=False \
-    ++actor_rollout_ref.rollout.disaggregation.cache_pool.load_async=False \
-    ++actor_rollout_ref.rollout.disaggregation.cache_pool.use_layerwise=False \
+    actor_rollout_ref.rollout.cache_pool.enabled=True \
+    actor_rollout_ref.rollout.cache_pool.backend=mooncake \
+    actor_rollout_ref.rollout.cache_pool.consumer_is_to_put=False \
+    actor_rollout_ref.rollout.cache_pool.store_decode_kv=False \
+    actor_rollout_ref.rollout.cache_pool.consumer_is_to_load=False \
+    actor_rollout_ref.rollout.cache_pool.load_async=False \
+    actor_rollout_ref.rollout.cache_pool.use_layerwise=False \
     "$@"
 )
 
@@ -389,6 +389,5 @@ else
     echo "Unknown RAY_SUBMIT_MODE=${RAY_SUBMIT_MODE}; expected job or local" >&2
     exit 1
 fi
-
 
 
