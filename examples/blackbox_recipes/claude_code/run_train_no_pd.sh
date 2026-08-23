@@ -17,7 +17,7 @@ cd "${REPO_ROOT}"
 
 # ── Model & data ─────────────────────────────────────────────────────────
 MODEL_PATH="${MODEL_PATH:-/mnt/share/weights/Qwen3.5-35B-A3B}"
-TRAIN_DATA="${TRAIN_DATA:-/mnt/share/t00986241/new_release/uni-agent/1.parquet}"
+TRAIN_DATA="${TRAIN_DATA:-/mnt/share/t00986241/new_release/uni-agent/tt.parquet}"
 VAL_DATA="${VAL_DATA:-/mnt/share/t00986241/swe_bench_verified_modified_yuanrong.parquet}"
 RUNTIME_ENV="${RUNTIME_ENV:-}"
 
@@ -61,11 +61,11 @@ if [[ "${TRAINER_MODE}" == "separate_async" ]]; then
 else
     GEN_TP="${GEN_TP:-${TP:-4}}"
 fi
-N="${N:-32}"
+N="${N:-24}"
 TEMPERATURE="${TEMPERATURE:-1.0}"
 TOP_P="${TOP_P:-1.0}"
 TOP_K="${TOP_K:--1}"
-ROLLOUT_GPU_MEM_UTIL="${ROLLOUT_GPU_MEM_UTIL:-0.8}"
+ROLLOUT_GPU_MEM_UTIL="${ROLLOUT_GPU_MEM_UTIL:-0.85}"
 UPDATE_WEIGHTS_BUCKET_MB="${UPDATE_WEIGHTS_BUCKET_MB:-2048}"
 
 # ── Megatron training parallelism ────────────────────────────────────────
@@ -81,7 +81,7 @@ TRAIN_ETP="${TRAIN_ETP:-1}"
 OFFLOAD="${OFFLOAD:-True}"
 OPTIMIZER_OFFLOAD_FRACTION="${OFFLOAD_FRACTION:-1.0}"
 USE_MBRIDGE="${USE_MBRIDGE:-True}"
-PPO_MINI_BATCH_SIZE="${PPO_MINI_BATCH_SIZE:-8}"
+PPO_MINI_BATCH_SIZE="${PPO_MINI_BATCH_SIZE:-4}"
 
 # ── Agent parameters ─────────────────────────────────────────────────────
 # AGENT_MAX_TURNS is the agent's turn budget inside the sandbox: it becomes
@@ -90,7 +90,7 @@ PPO_MINI_BATCH_SIZE="${PPO_MINI_BATCH_SIZE:-8}"
 # trainer's multi_turn.max_assistant_turns is NOT enforced on the blackbox
 # rollout path (AgentFrameworkRolloutAdapter), so it is not exposed here.
 RUNNER="${RUNNER:-claude_code}"
-AGENT_MAX_TURNS="${AGENT_MAX_TURNS:-100}"
+AGENT_MAX_TURNS="${AGENT_MAX_TURNS:-60}"
 if [[ "${RUNNER}" == "claude_code" ]]; then
     AGENT_RUNNER_FQN="examples.blackbox_recipes.claude_code.claude_code_runner.claude_code_runner"
     CLAUDE_CODE_TOOL_IMAGE="${CLAUDE_CODE_TOOL_IMAGE:-7.227.53.47:8091/openyuanrong/claude-code-tool:latest}"
@@ -101,7 +101,7 @@ fi
 SWE_AGENT_RUN_TIMEOUT="${SWE_AGENT_RUN_TIMEOUT:-5400}"
 CONDA_ENV="${CONDA_ENV:-testbed}"
 GATEWAY_COUNT="${GATEWAY_COUNT:-2}"
-MAX_CONCURRENT_SESSIONS="${MAX_CONCURRENT_SESSIONS:-128}"
+MAX_CONCURRENT_SESSIONS="${MAX_CONCURRENT_SESSIONS:-96}"
 NUM_AGENT_WORKERS="${NUM_AGENT_WORKERS:-32}"
 PROJECT_NAME="${PROJECT_NAME:-tcx_claude_code}"
 EXPERIMENT_NAME="${EXPERIMENT_NAME:-tcx_claude_code_$(date +%Y%m%d_%H%M)}"
@@ -276,7 +276,7 @@ MAIN_CMD=(
     actor_rollout_ref.rollout.prompt_length=${PROMPT_LENGTH} \
     actor_rollout_ref.rollout.response_length=${RESPONSE_LENGTH} \
     actor_rollout_ref.rollout.max_model_len=${MAX_MODEL_LEN} \
-    actor_rollout_ref.rollout.max_num_batched_tokens=65536 \
+    actor_rollout_ref.rollout.max_num_batched_tokens=${MAX_MODEL_LEN} \
     actor_rollout_ref.rollout.temperature=${TEMPERATURE} \
     actor_rollout_ref.rollout.top_p=${TOP_P} \
     actor_rollout_ref.rollout.top_k=${TOP_K} \
