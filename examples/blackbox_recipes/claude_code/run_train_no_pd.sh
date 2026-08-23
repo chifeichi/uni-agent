@@ -17,7 +17,7 @@ cd "${REPO_ROOT}"
 
 # ── Model & data ─────────────────────────────────────────────────────────
 MODEL_PATH="${MODEL_PATH:-/mnt/share/weights/Qwen3.5-35B-A3B}"
-TRAIN_DATA="${TRAIN_DATA:-/mnt/share/t00986241/new_release/uni-agent/tt.parquet}"
+TRAIN_DATA="${TRAIN_DATA:-/mnt/share/t00986241/new_release/uni-agent/pp.parquet}"
 VAL_DATA="${VAL_DATA:-/mnt/share/t00986241/swe_bench_verified_modified_yuanrong.parquet}"
 RUNTIME_ENV="${RUNTIME_ENV:-}"
 
