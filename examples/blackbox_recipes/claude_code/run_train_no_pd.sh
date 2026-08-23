@@ -2,8 +2,7 @@
 # Megatron + V1 async training for the blackbox claude-code recipe.
 #
 # Uses verl.trainer.main_ppo with the V1 unified trainer. The default mode is
-# colocate_async so completed prompt groups can be consumed without waiting for
-# every in-flight group (V1 partial-rollout behavior).
+# synchronous colocated training and rollout.
 #
 # Usage:
 #   bash examples/blackbox_recipes/claude_code/run_train.sh
@@ -23,7 +22,7 @@ VAL_DATA="${VAL_DATA:-/mnt/share/t00986241/swe_bench_verified_modified_yuanrong.
 RUNTIME_ENV="${RUNTIME_ENV:-}"
 
 # ── V1 trainer ───────────────────────────────────────────────────────────
-TRAINER_MODE="${TRAINER_MODE:-colocate_async}"
+TRAINER_MODE="${TRAINER_MODE:-sync}"
 NUM_WARMUP_BATCHES="${NUM_WARMUP_BATCHES:-1}"
 SEPARATE_NUM_WARMUP_BATCHES="${SEPARATE_NUM_WARMUP_BATCHES:-${NUM_WARMUP_BATCHES}}"
 PARAMETER_SYNC_STEP="${PARAMETER_SYNC_STEP:-1}"
@@ -52,7 +51,7 @@ ACTOR_LR="${ACTOR_LR:-1e-6}"
 
 # ── Sequence lengths ─────────────────────────────────────────────────────
 PROMPT_LENGTH="${PROMPT_LENGTH:-4096}"
-RESPONSE_LENGTH="${RESPONSE_LENGTH:-131072}"
+RESPONSE_LENGTH="${RESPONSE_LENGTH:-65536}"
 MAX_MODEL_LEN=$((PROMPT_LENGTH + RESPONSE_LENGTH))
 
 # ── Rollout parameters ───────────────────────────────────────────────────
@@ -66,7 +65,7 @@ N="${N:-8}"
 TEMPERATURE="${TEMPERATURE:-1.0}"
 TOP_P="${TOP_P:-1.0}"
 TOP_K="${TOP_K:--1}"
-ROLLOUT_GPU_MEM_UTIL="${ROLLOUT_GPU_MEM_UTIL:-0.85}"
+ROLLOUT_GPU_MEM_UTIL="${ROLLOUT_GPU_MEM_UTIL:-0.9}"
 UPDATE_WEIGHTS_BUCKET_MB="${UPDATE_WEIGHTS_BUCKET_MB:-2048}"
 
 # ── Megatron training parallelism ────────────────────────────────────────
@@ -91,7 +90,7 @@ PPO_MINI_BATCH_SIZE="${PPO_MINI_BATCH_SIZE:-4}"
 # trainer's multi_turn.max_assistant_turns is NOT enforced on the blackbox
 # rollout path (AgentFrameworkRolloutAdapter), so it is not exposed here.
 RUNNER="${RUNNER:-claude_code}"
-AGENT_MAX_TURNS="${AGENT_MAX_TURNS:-60}"
+AGENT_MAX_TURNS="${AGENT_MAX_TURNS:-40}"
 if [[ "${RUNNER}" == "claude_code" ]]; then
     AGENT_RUNNER_FQN="examples.blackbox_recipes.claude_code.claude_code_runner.claude_code_runner"
     CLAUDE_CODE_TOOL_IMAGE="${CLAUDE_CODE_TOOL_IMAGE:-7.227.53.47:8091/openyuanrong/claude-code-tool:latest}"
@@ -263,6 +262,7 @@ MAIN_CMD=(
     transfer_queue.enable=True \
     transfer_queue.metrics.enabled=True \
     actor_rollout_ref.model.path="${MODEL_PATH}" \
+    actor_rollout_ref.model.use_remove_padding=True \
     data.train_files="['${TRAIN_DATA}']" \
     data.val_files="['${VAL_DATA}']" \
     data.train_max_samples=${TRAIN_MAX_SAMPLES} \
@@ -297,6 +297,7 @@ MAIN_CMD=(
     "${RUNNER_ARGS[@]}" \
     actor_rollout_ref.actor.clip_ratio_low=${CLIP_RATIO_LOW} \
     actor_rollout_ref.actor.clip_ratio_high=${CLIP_RATIO_HIGH} \
+    actor_rollout_ref.actor.use_dynamic_bsz=True \
     actor_rollout_ref.actor.ppo_mini_batch_size=${PPO_MINI_BATCH_SIZE} \
     actor_rollout_ref.actor.ppo_max_token_len_per_gpu=${ACTOR_PPO_MAX_TOKEN_LEN} \
     actor_rollout_ref.actor.optim.lr=${ACTOR_LR} \
@@ -311,7 +312,10 @@ MAIN_CMD=(
     actor_rollout_ref.actor.megatron.pipeline_model_parallel_size=${TRAIN_PP} \
     actor_rollout_ref.actor.megatron.expert_model_parallel_size=${TRAIN_EP} \
     actor_rollout_ref.actor.megatron.expert_tensor_parallel_size=${TRAIN_ETP} \
+    actor_rollout_ref.actor.megatron.use_remove_padding=True \
     actor_rollout_ref.actor.megatron.sequence_parallel=True \
+    +actor_rollout_ref.actor.megatron.override_transformer_config.use_triton_gdn=False \
+    +actor_rollout_ref.actor.megatron.override_transformer_config.use_ascend_gdn=True \
     +actor_rollout_ref.actor.megatron.override_transformer_config.moe_permute_fusion=false \
     actor_rollout_ref.ref.megatron.expert_model_parallel_size=${TRAIN_EP} \
     actor_rollout_ref.ref.megatron.expert_tensor_parallel_size=${TRAIN_ETP} \
@@ -323,9 +327,11 @@ MAIN_CMD=(
     actor_rollout_ref.ref.megatron.pipeline_model_parallel_size=${TRAIN_PP} \
     actor_rollout_ref.ref.megatron.context_parallel_size=${TRAIN_CP} \
     actor_rollout_ref.rollout.calculate_log_probs=True \
+    actor_rollout_ref.rollout.log_prob_use_dynamic_bsz=True \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=1 \
     actor_rollout_ref.rollout.log_prob_max_token_len_per_gpu=${INFER_PPO_MAX_TOKEN_LEN} \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=1 \
+    actor_rollout_ref.ref.log_prob_use_dynamic_bsz=True \
     actor_rollout_ref.ref.log_prob_max_token_len_per_gpu=${INFER_PPO_MAX_TOKEN_LEN} \
     trainer.logger='["console","rl_insight"]' \
     trainer.project_name="${PROJECT_NAME}" \
@@ -366,5 +372,3 @@ else
     echo "Unknown RAY_SUBMIT_MODE=${RAY_SUBMIT_MODE}; expected job or local" >&2
     exit 1
 fi
-
-
