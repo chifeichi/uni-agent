@@ -2,7 +2,8 @@
 # Megatron + V1 async training for the blackbox claude-code recipe.
 #
 # Uses verl.trainer.main_ppo with the V1 unified trainer. The default mode is
-# separate_async, which uses separate trainer and rollout GPU pools.
+# colocate_async so completed prompt groups can be consumed without waiting for
+# every in-flight group (V1 partial-rollout behavior).
 #
 # Usage:
 #   bash examples/blackbox_recipes/claude_code/run_train.sh
@@ -22,7 +23,7 @@ VAL_DATA="${VAL_DATA:-/mnt/share/t00986241/swe_bench_verified_modified_yuanrong.
 RUNTIME_ENV="${RUNTIME_ENV:-}"
 
 # ── V1 trainer ───────────────────────────────────────────────────────────
-TRAINER_MODE="${TRAINER_MODE:-sync}"
+TRAINER_MODE="${TRAINER_MODE:-colocate_async}"
 NUM_WARMUP_BATCHES="${NUM_WARMUP_BATCHES:-1}"
 SEPARATE_NUM_WARMUP_BATCHES="${SEPARATE_NUM_WARMUP_BATCHES:-${NUM_WARMUP_BATCHES}}"
 PARAMETER_SYNC_STEP="${PARAMETER_SYNC_STEP:-1}"
@@ -61,7 +62,7 @@ if [[ "${TRAINER_MODE}" == "separate_async" ]]; then
 else
     GEN_TP="${GEN_TP:-${TP:-4}}"
 fi
-N="${N:-24}"
+N="${N:-8}"
 TEMPERATURE="${TEMPERATURE:-1.0}"
 TOP_P="${TOP_P:-1.0}"
 TOP_K="${TOP_K:--1}"
@@ -135,7 +136,7 @@ TOTAL_TRAINING_STEPS="${TOTAL_TRAINING_STEPS:-}"
 VAL_BEFORE_TRAIN="false"
 TRAIN_MAX_SAMPLES="${TRAIN_MAX_SAMPLES:-${MAX_SAMPLES:--1}}"
 VAL_MAX_SAMPLES="${VAL_MAX_SAMPLES:-${MAX_SAMPLES:-2}}"
-TRAIN_BATCH_SIZE="${TRAIN_BATCH_SIZE:-4}"
+TRAIN_BATCH_SIZE="${TRAIN_BATCH_SIZE:-12}"
 VAL_BATCH_SIZE="${VAL_BATCH_SIZE:-${TRAIN_BATCH_SIZE}}"
 
 #export ASCEND_RT_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
@@ -365,6 +366,5 @@ else
     echo "Unknown RAY_SUBMIT_MODE=${RAY_SUBMIT_MODE}; expected job or local" >&2
     exit 1
 fi
-
 
 
