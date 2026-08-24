@@ -27,7 +27,8 @@ from tests.uni_agent.support import (
 ALLOWED_SAMPLING_KEYS = frozenset({"temperature", "top_p", "top_k", "max_tokens", "stop"})
 
 
-def fake_tool_call_dispatch(text, tools, parser_name, tokenizer):
+async def fake_tool_call_dispatch(self, response_ids, tools, parser_name):
+    text = self._tokenizer.decode(response_ids, skip_special_tokens=False)
     if "<tool_call>" not in text:
         return text, []
     arguments = '{"query":"crop"}' if "crop" in text else '{"query":"weather"}'
@@ -57,12 +58,13 @@ def test_gateway_actor_config_rejects_non_positive_prompt_length(prompt_length):
         GatewayActorConfig(tokenizer=FakeTokenizer(), prompt_length=prompt_length)
 
 
+@pytest.mark.parametrize("field", ["enable_last_assistant_rollback", "enable_tool_parser_cache"])
 @pytest.mark.parametrize("value", ["true", 1, None])
-def test_gateway_actor_config_rejects_non_bool_last_assistant_rollback(value):
+def test_gateway_actor_config_rejects_non_bool_options(field, value):
     from uni_agent.gateway.config import GatewayActorConfig
 
-    with pytest.raises(ValueError, match="enable_last_assistant_rollback must be a bool"):
-        GatewayActorConfig(tokenizer=FakeTokenizer(), enable_last_assistant_rollback=value)
+    with pytest.raises(ValueError, match=rf"{field} must be a bool"):
+        GatewayActorConfig(tokenizer=FakeTokenizer(), **{field: value})
 
 
 def test_gateway_actor_config_enables_last_assistant_rollback_by_default():
@@ -837,7 +839,7 @@ async def test_gateway_actor_continuation_with_tool_returned_image_appends_media
         initialize_turn_separator,
     )
 
-    monkeypatch.setattr(codec_mod, "_extract_tool_calls_with_sglang_or_vllm", fake_tool_call_dispatch)
+    monkeypatch.setattr(codec_mod.MessageCodec, "_extract_tool_calls", fake_tool_call_dispatch)
     processor = FakeProcessor()
     tool_call_text = '<tool_call>\n{"name": "search", "arguments": {"query": "crop"}}\n</tool_call>'
     actor = _GatewayActor(
@@ -1369,12 +1371,28 @@ async def test_gateway_actor_tool_call_decode_returns_openai_format(monkeypatch)
     from uni_agent.gateway.config import GatewayActorConfig
     from uni_agent.gateway.gateway import _GatewayActor
 
-    monkeypatch.setattr(codec_mod, "_extract_tool_calls_with_sglang_or_vllm", fake_tool_call_dispatch)
+    def fake_vllm_parser(self, text, tools, parser_name):
+        assert tools
+        assert parser_name == "hermes"
+        if "<tool_call>" not in text:
+            return text, []
+        return "", [SimpleNamespace(name="search", arguments='{"query":"weather"}')]
+
+    def fail_sync_parser(*args, **kwargs):
+        raise AssertionError("rollout backend should select the vLLM parser")
+
+    async def fail_async_parser(*args, **kwargs):
+        raise AssertionError("rollout backend should select the vLLM parser")
+
+    monkeypatch.setattr(codec_mod.MessageCodec, "_process_tool_calls_sglang", fail_sync_parser)
+    monkeypatch.setattr(codec_mod.MessageCodec, "_process_tool_calls_vllm", fake_vllm_parser)
+    monkeypatch.setattr(codec_mod.MessageCodec, "_process_tool_calls_verl", fail_async_parser)
     tool_call_text = '<tool_call>\n{"name": "search", "arguments": {"query": "weather"}}\n</tool_call>'
     actor = _GatewayActor(
         GatewayActorConfig(
             tokenizer=FakeTokenizer(),
             tool_parser_name="hermes",
+            rollout_backend="vllm",
         ),
         QueuedBackend([tool_call_text, "sunny today"]),
     )
@@ -1492,7 +1510,7 @@ async def test_anthropic_tool_turn_round_trip_extends_not_reencodes(monkeypatch)
     from uni_agent.gateway.config import GatewayActorConfig
     from uni_agent.gateway.gateway import _GatewayActor
 
-    monkeypatch.setattr(codec_mod, "_extract_tool_calls_with_sglang_or_vllm", fake_tool_call_dispatch)
+    monkeypatch.setattr(codec_mod.MessageCodec, "_extract_tool_calls", fake_tool_call_dispatch)
     tool_call_text = '<tool_call>\n{"name": "search", "arguments": {"query": "weather"}}\n</tool_call>'
     actor = _GatewayActor(
         GatewayActorConfig(
