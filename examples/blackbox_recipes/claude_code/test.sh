@@ -16,16 +16,10 @@ REPO_ROOT="/mnt/share/t00986241/new_release/uni-agent"
 cd "${REPO_ROOT}"
 
 # ── Model & data ─────────────────────────────────────────────────────────
-MODEL_PATH="${MODEL_PATH:-/mnt/share/weights/Qwen3-30B-A3B-Base1}"
-TOKENIZER_PATH="${TOKENIZER_PATH:-${MODEL_PATH}}"
+MODEL_PATH="${MODEL_PATH:-/mnt/share/weights/Qwen3.5-35B-A3B}"
 TRAIN_DATA="${TRAIN_DATA:-/mnt/share/t00986241/new_release/uni-agent/pp.parquet}"
 VAL_DATA="${VAL_DATA:-/mnt/share/t00986241/swe_bench_verified_modified_yuanrong.parquet}"
 RUNTIME_ENV="${RUNTIME_ENV:-}"
-
-if [[ -d "${TOKENIZER_PATH}" && ! -f "${TOKENIZER_PATH}/tokenizer.json" ]]; then
-    echo "Missing ${TOKENIZER_PATH}/tokenizer.json; set TOKENIZER_PATH to a complete Qwen3 model directory." >&2
-    exit 1
-fi
 
 # ── V1 trainer ───────────────────────────────────────────────────────────
 TRAINER_MODE="${TRAINER_MODE:-colocate_async}"
@@ -177,7 +171,6 @@ export RL_INSIGHT_SERVER_URL="http://80.5.25.123:18080"
 
 echo "=== Claude Code Blackbox Megatron Async Training ==="
 echo "Model:       ${MODEL_PATH}"
-echo "Tokenizer:   ${TOKENIZER_PATH}"
 echo "Train data:  ${TRAIN_DATA}"
 echo "Val data:    ${VAL_DATA}"
 echo "Engine:      ${ENGINE} (gen_tp=${GEN_TP}, train_tp=${TRAIN_TP})"
@@ -274,7 +267,6 @@ MAIN_CMD=(
     transfer_queue.enable=True \
     transfer_queue.metrics.enabled=True \
     actor_rollout_ref.model.path="${MODEL_PATH}" \
-    actor_rollout_ref.model.tokenizer_path="${TOKENIZER_PATH}" \
     actor_rollout_ref.model.trust_remote_code=True \
     actor_rollout_ref.model.use_remove_padding=True \
     data.train_files="['${TRAIN_DATA}']" \
