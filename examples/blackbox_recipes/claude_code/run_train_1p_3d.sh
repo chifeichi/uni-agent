@@ -65,7 +65,7 @@ N="${N:-8}"
 TEMPERATURE="${TEMPERATURE:-0.6}"
 TOP_P="${TOP_P:-0.9}"
 TOP_K="${TOP_K:--1}"
-ROLLOUT_GPU_MEM_UTIL="${ROLLOUT_GPU_MEM_UTIL:-0.9}"
+ROLLOUT_GPU_MEM_UTIL="${ROLLOUT_GPU_MEM_UTIL:-0.8}"
 UPDATE_WEIGHTS_BUCKET_MB="${UPDATE_WEIGHTS_BUCKET_MB:-2048}"
 
 # ── Megatron training parallelism ────────────────────────────────────────
@@ -358,8 +358,8 @@ MAIN_CMD=(
     +actor_rollout_ref.rollout.disaggregation.decode_tensor_model_parallel_size=4 \
     ++actor_rollout_ref.rollout.disaggregation.transfer_backend=mooncake \
     actor_rollout_ref.rollout.disaggregation.decode_policy.type=power_of_two \
-    actor_rollout_ref.rollout.disaggregation.prefill_gpu_memory_utilization=0.9 \
-    actor_rollout_ref.rollout.disaggregation.decode_gpu_memory_utilization=0.9 \
+    actor_rollout_ref.rollout.disaggregation.prefill_gpu_memory_utilization=0.8 \
+    actor_rollout_ref.rollout.disaggregation.decode_gpu_memory_utilization=0.8 \
     actor_rollout_ref.rollout.disaggregation.prefill_engine_kwargs.max_num_batched_tokens=8192 \
     actor_rollout_ref.rollout.disaggregation.prefill_engine_kwargs.enforce_eager=False \
     actor_rollout_ref.rollout.disaggregation.prefill_engine_kwargs.compilation_config.cudagraph_mode="FULL_DECODE_ONLY" \
