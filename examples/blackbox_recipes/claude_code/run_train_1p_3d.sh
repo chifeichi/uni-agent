@@ -236,6 +236,23 @@ else
     TOTAL_GPUS=$(( NNODES * N_GPUS_PER_NODE ))
 fi
 
+# Do not let Megatron workers inherit vLLM-Ascend's custom OPP. Both
+# vLLM-Ascend and fla_npu register ChunkGatedDeltaRuleFwdH; the rollout
+# workers run in separate processes and add _cann_ops_custom back when they
+# import vllm_ascend.
+export ASCEND_CUSTOM_OPP_PATH="$(
+    printf '%s' "${ASCEND_CUSTOM_OPP_PATH:-}" |
+        tr ':' '\n' |
+        awk 'NF && $0 !~ /_cann_ops_custom/' |
+        paste -sd: -
+)"
+export LD_LIBRARY_PATH="$(
+    printf '%s' "${LD_LIBRARY_PATH:-}" |
+        tr ':' '\n' |
+        awk 'NF && $0 !~ /_cann_ops_custom/' |
+        paste -sd: -
+)"
+
 ray stop
 ray start --head --disable-usage-stats
 #if ! timeout "${RAY_STATUS_TIMEOUT}" ray status &>/dev/null; then
@@ -263,6 +280,7 @@ MAIN_CMD=(
     transfer_queue.enable=True \
     transfer_queue.metrics.enabled=True \
     actor_rollout_ref.model.path="${MODEL_PATH}" \
+    actor_rollout_ref.model.use_remove_padding=True \
     data.train_files="['${TRAIN_DATA}']" \
     data.val_files="['${VAL_DATA}']" \
     data.train_max_samples=${TRAIN_MAX_SAMPLES} \
@@ -298,6 +316,7 @@ MAIN_CMD=(
     "${RUNNER_ARGS[@]}" \
     actor_rollout_ref.actor.clip_ratio_low=${CLIP_RATIO_LOW} \
     actor_rollout_ref.actor.clip_ratio_high=${CLIP_RATIO_HIGH} \
+    actor_rollout_ref.actor.use_dynamic_bsz=True \
     actor_rollout_ref.actor.ppo_mini_batch_size=${PPO_MINI_BATCH_SIZE} \
     actor_rollout_ref.actor.ppo_max_token_len_per_gpu=${ACTOR_PPO_MAX_TOKEN_LEN} \
     actor_rollout_ref.actor.optim.lr=${ACTOR_LR} \
@@ -308,6 +327,7 @@ MAIN_CMD=(
     actor_rollout_ref.actor.megatron.param_offload=${OFFLOAD} \
     actor_rollout_ref.actor.megatron.grad_offload=${OFFLOAD} \
     actor_rollout_ref.actor.megatron.optimizer_offload=${OFFLOAD} \
+    actor_rollout_ref.actor.megatron.use_remove_padding=True \
     actor_rollout_ref.actor.megatron.tensor_model_parallel_size=${TRAIN_TP} \
     actor_rollout_ref.actor.megatron.pipeline_model_parallel_size=${TRAIN_PP} \
     actor_rollout_ref.actor.megatron.expert_model_parallel_size=${TRAIN_EP} \
