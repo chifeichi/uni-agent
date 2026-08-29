@@ -12,7 +12,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="/mnt/share/t00986241/new_release/uni-agent"
+REPO_ROOT="/mnt/share/t00986241/latest_release/uni-agent"
 cd "${REPO_ROOT}"
 
 # ── Model & data ─────────────────────────────────────────────────────────
@@ -81,7 +81,7 @@ TRAIN_ETP="${TRAIN_ETP:-1}"
 OFFLOAD="${OFFLOAD:-True}"
 OPTIMIZER_OFFLOAD_FRACTION="${OFFLOAD_FRACTION:-1.0}"
 USE_MBRIDGE="${USE_MBRIDGE:-True}"
-PPO_MINI_BATCH_SIZE="${PPO_MINI_BATCH_SIZE:-8}"
+PPO_MINI_BATCH_SIZE="${PPO_MINI_BATCH_SIZE:-4}"
 
 # ── Agent parameters ─────────────────────────────────────────────────────
 # AGENT_MAX_TURNS is the agent's turn budget inside the sandbox: it becomes
@@ -101,7 +101,7 @@ fi
 SWE_AGENT_RUN_TIMEOUT="${SWE_AGENT_RUN_TIMEOUT:-5400}"
 CONDA_ENV="${CONDA_ENV:-testbed}"
 GATEWAY_COUNT="${GATEWAY_COUNT:-2}"
-MAX_CONCURRENT_SESSIONS="${MAX_CONCURRENT_SESSIONS:-96}"
+MAX_CONCURRENT_SESSIONS="${MAX_CONCURRENT_SESSIONS:-128}"
 NUM_AGENT_WORKERS="${NUM_AGENT_WORKERS:-32}"
 PROJECT_NAME="${PROJECT_NAME:-tcx_claude_code}"
 EXPERIMENT_NAME="${EXPERIMENT_NAME:-tcx_claude_code_$(date +%Y%m%d_%H%M)}"
@@ -262,6 +262,7 @@ MAIN_CMD=(
     transfer_queue.enable=True \
     transfer_queue.metrics.enabled=True \
     actor_rollout_ref.model.path="${MODEL_PATH}" \
+    actor_rollout_ref.model.use_remove_padding=True \
     data.train_files="['${TRAIN_DATA}']" \
     data.val_files="['${VAL_DATA}']" \
     data.train_max_samples=${TRAIN_MAX_SAMPLES} \
@@ -303,8 +304,8 @@ MAIN_CMD=(
     +actor_rollout_ref.actor.optim.override_optimizer_config.use_precision_aware_optimizer=True \
     +actor_rollout_ref.actor.optim.override_optimizer_config.optimizer_cpu_offload=True \
     actor_rollout_ref.actor.megatron.param_offload=${OFFLOAD} \
-    actor_rollout_ref.actor.megatron.grad_offload=${OFFLOAD} \
     actor_rollout_ref.actor.megatron.optimizer_offload=${OFFLOAD} \
+    actor_rollout_ref.actor.megatron.use_remove_padding=True \
     actor_rollout_ref.actor.megatron.tensor_model_parallel_size=${TRAIN_TP} \
     actor_rollout_ref.actor.megatron.pipeline_model_parallel_size=${TRAIN_PP} \
     actor_rollout_ref.actor.megatron.expert_model_parallel_size=${TRAIN_EP} \
@@ -320,7 +321,7 @@ MAIN_CMD=(
     actor_rollout_ref.ref.megatron.tensor_model_parallel_size=${TRAIN_TP} \
     actor_rollout_ref.ref.megatron.pipeline_model_parallel_size=${TRAIN_PP} \
     actor_rollout_ref.ref.megatron.context_parallel_size=${TRAIN_CP} \
-    actor_rollout_ref.rollout.calculate_log_probs=False \
+    actor_rollout_ref.rollout.calculate_log_probs=True \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=1 \
     actor_rollout_ref.rollout.log_prob_max_token_len_per_gpu=${INFER_PPO_MAX_TOKEN_LEN} \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=1 \

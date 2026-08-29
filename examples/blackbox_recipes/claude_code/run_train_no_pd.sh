@@ -12,7 +12,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="/mnt/share/t00986241/new_release/uni-agent"
+REPO_ROOT="/mnt/share/t00986241/latest_release/uni-agent"
 cd "${REPO_ROOT}"
 
 # ── Model & data ─────────────────────────────────────────────────────────
@@ -155,17 +155,6 @@ export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
 export PYTHONPATH="${REPO_ROOT}:${REPO_ROOT}/verl:${PYTHONPATH:-}"
 export SANDBOX_NAME_PREFIX="tcx_test_sandbox"
 export RL_INSIGHT_SERVER_URL="http://80.5.25.123:18080"
-#unset ASCEND_USE_ASYNC_TRANSFER
-#export ASCEND_USE_SHORT_CONNECTION=1
-# export ASCEND_USE_SHORT_CONNECTION=0
-# export ASCEND_AUTO_CONNECT=0
-# export ASCEND_CONNECT_TIMEOUT=30000
-# export ASCEND_TRANSFER_TIMEOUT=30000
-# export VLLM_ASCEND_PD_TRANSFER_LOG_EVERY=20
-#export MOONCAKE_ASCEND_TRANSFER_TIMING_LOG_EVERY=10
-#export VERL_PD_SESSION_CACHE_DEBUG=1
-#export VERL_PD_SESSION_CACHE_LOG_EVERY=16
-#export VERL_PD_ROUTING_LOG_EVERY=10
 
 echo "=== Claude Code Blackbox Megatron Async Training ==="
 echo "Model:       ${MODEL_PATH}"
@@ -263,6 +252,7 @@ MAIN_CMD=(
     transfer_queue.enable=True \
     transfer_queue.metrics.enabled=True \
     actor_rollout_ref.model.path="${MODEL_PATH}" \
+    actor_rollout_ref.model.use_remove_padding=False \
     data.train_files="['${TRAIN_DATA}']" \
     data.val_files="['${VAL_DATA}']" \
     data.train_max_samples=${TRAIN_MAX_SAMPLES} \
@@ -286,11 +276,11 @@ MAIN_CMD=(
     actor_rollout_ref.rollout.n_gpus_per_node=${ROLLOUT_NGPUS_PER_NODE} \
     actor_rollout_ref.rollout.tensor_model_parallel_size=${GEN_TP} \
     actor_rollout_ref.rollout.gpu_memory_utilization=${ROLLOUT_GPU_MEM_UTIL} \
+    actor_rollout_ref.rollout.enforce_eager=False \
     # actor_rollout_ref.hybrid_engine=True \
     +actor_rollout_ref.rollout.engine_kwargs.vllm.compilation_config.cudagraph_mode="FULL_DECODE_ONLY" \
     # +actor_rollout_ref.rollout.engine_kwargs.vllm.mamba_cache_mode=align \
     +actor_rollout_ref.rollout.engine_kwargs.vllm.additional_config.enable_cpu_binding=true \
-    +actor_rollout_ref.rollout.engine_kwargs.vllm.additional_config.enable_sleep_mode_extra_cleanup=true \
     +actor_rollout_ref.rollout.engine_kwargs.vllm.async_scheduling=false \
     +actor_rollout_ref.rollout.engine_kwargs.vllm.no_disable_hybrid_kv_cache_manager=True \
     actor_rollout_ref.rollout.multi_turn.max_assistant_turns=${AGENT_MAX_TURNS} \
@@ -298,6 +288,7 @@ MAIN_CMD=(
     "${RUNNER_ARGS[@]}" \
     actor_rollout_ref.actor.clip_ratio_low=${CLIP_RATIO_LOW} \
     actor_rollout_ref.actor.clip_ratio_high=${CLIP_RATIO_HIGH} \
+    actor_rollout_ref.actor.use_dynamic_bsz=False \
     actor_rollout_ref.actor.ppo_mini_batch_size=${PPO_MINI_BATCH_SIZE} \
     actor_rollout_ref.actor.ppo_max_token_len_per_gpu=${ACTOR_PPO_MAX_TOKEN_LEN} \
     actor_rollout_ref.actor.optim.lr=${ACTOR_LR} \
@@ -306,8 +297,8 @@ MAIN_CMD=(
     +actor_rollout_ref.actor.optim.override_optimizer_config.use_precision_aware_optimizer=True \
     +actor_rollout_ref.actor.optim.override_optimizer_config.optimizer_cpu_offload=True \
     actor_rollout_ref.actor.megatron.param_offload=${OFFLOAD} \
-    actor_rollout_ref.actor.megatron.grad_offload=${OFFLOAD} \
     actor_rollout_ref.actor.megatron.optimizer_offload=${OFFLOAD} \
+    actor_rollout_ref.actor.megatron.use_remove_padding=False \
     actor_rollout_ref.actor.megatron.tensor_model_parallel_size=${TRAIN_TP} \
     actor_rollout_ref.actor.megatron.pipeline_model_parallel_size=${TRAIN_PP} \
     actor_rollout_ref.actor.megatron.expert_model_parallel_size=${TRAIN_EP} \
@@ -351,7 +342,6 @@ MAIN_CMD=(
     # actor_rollout_ref.rollout.profiler.enable=True \
     # actor_rollout_ref.rollout.profiler.ranks="[0]" \
     # actor_rollout_ref.rollout.profiler.all_ranks=False \
-    actor_rollout_ref.rollout.enforce_eager=False \
     "$@"
 )
 
