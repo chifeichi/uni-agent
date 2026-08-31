@@ -60,6 +60,14 @@ export EXPERIMENT_NAME="${EXPERIMENT_NAME:-gsm8k_${DEFAULT_EXPERIMENT_SUFFIX}_$(
 
 SEED="${SEED:-42}"
 
+# vLLM-Ascend's batch-invariant matmul currently accepts only 2-D inputs.
+# Qwen3.5 exercises higher-rank linear inputs during profile_run, so enabling
+# VERL full determinism would make model initialization fail before rollout.
+# Keep fixed data/rollout seeds for comparable runs, but disable this kernel
+# substitution explicitly (including stale values inherited by Ray workers).
+export VLLM_BATCH_INVARIANT=0
+export VERL_FULL_DETERMINISM=0
+
 COMMON_OVERRIDES=(
     algorithm.adv_estimator=grpo
     data.shuffle=False
@@ -74,7 +82,7 @@ COMMON_OVERRIDES=(
     reward.reward_manager.name=naive
     actor_rollout_ref.rollout.multi_turn.enable=False
     actor_rollout_ref.rollout.agent.agent_loop_manager_class=null
-    actor_rollout_ref.rollout.full_determinism=True
+    actor_rollout_ref.rollout.full_determinism=False
     actor_rollout_ref.rollout.seed="${SEED}"
     actor_rollout_ref.rollout.val_kwargs.n=1
     actor_rollout_ref.rollout.val_kwargs.do_sample=False
